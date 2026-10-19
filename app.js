@@ -302,7 +302,7 @@ addCardDeleteButtons=function(){
       if(isHelperDefault)state.helperDefaultServices=state.helperDefaultServices.filter(s=>s.id!==serviceId);
       else if(isDefault)state.defaultServices=state.defaultServices.filter(s=>s.id!==serviceId);
       else state.services=state.services.filter(s=>s.id!==serviceId);
-      save();close();
+      save();close();render();
     };
   });
 };
@@ -338,7 +338,7 @@ addMultiSelectTools=function(){
         else if(isDefault)state.defaultServices=state.defaultServices.filter(s=>s.id!==serviceId);
         else state.services=state.services.filter(s=>s.id!==serviceId);
       });
-      save();
+      save();render();
     };
     toolbar.appendChild(button);
   });
@@ -577,7 +577,7 @@ document.addEventListener('click',e=>{
   if(!service)return;
   if(!confirm('このヘルパーの担当を解除し、週間スケジュールの未割当に戻しますか？'))return;
   service.helperId='';service.status='unassigned';service.managerName='';
-  save();close();
+  save();close();render();
 },true);
 
 // 同じヘルパーの時間が重なっても担当を外さず、カードの重複表示（紫）で知らせます。
@@ -588,7 +588,7 @@ assign=function(helperId){
   service.helperId=helperId;
   service.status='assigned';
   service.managerName='';
-  save();close();
+  save();close();render();
 };
 
 const quickAddBeforeOverlapSupport=quickAddModal;
@@ -611,7 +611,7 @@ quickAddModal=function(helperId='',targetWeek=currentWeekKey()){
       status:selectedHelper==='manager'?'manager':selectedHelper?'assigned':'unassigned',
       managerName:selectedHelper==='manager'?'サ責対応':''
     };
-    state.services.push(service);save();close();
+    state.services.push(service);save();close();render();
   };
 };
 
@@ -629,7 +629,7 @@ quickTimeEdit=function(serviceId){
     const message=timeRangeMessage(startTime,endTime);
     if(message){alert(message);return}
     service.startTime=startTime;service.endTime=endTime;
-    save();close();
+    save();close();render();
   };
 };
 
