@@ -1,3 +1,33 @@
+// 表示の好みは予定データとは別に、このブラウザーだけに記憶します。
+(function setupDisplayMode(){
+  const key='care-schedule-display-mode';
+  const narrow=window.matchMedia('(max-width:840px)');
+  let preference=null;
+  try{const saved=localStorage.getItem(key);if(saved==='mobile'||saved==='desktop')preference=saved}catch{}
+  function apply(){
+    const mode=preference||(narrow.matches?'mobile':'desktop');
+    document.documentElement.dataset.displayMode=mode;
+    document.querySelectorAll('[data-display-mode]').forEach(button=>{
+      if(button.tagName!=='BUTTON')return;
+      const selected=button.dataset.displayMode===mode;
+      button.setAttribute('aria-pressed',String(selected));
+      button.classList.toggle('button-primary',selected);
+      button.classList.toggle('button-light',!selected);
+    });
+    document.querySelector('#displayModeHint').textContent=mode==='desktop'?'1週間表示・表を左右にスクロールできます':'1日ずつ表示します';
+    window.dispatchEvent(new Event('resize'));
+  }
+  document.querySelectorAll('button[data-display-mode]').forEach(button=>{
+    button.addEventListener('click',()=>{
+      preference=button.dataset.displayMode;
+      apply();
+      try{localStorage.setItem(key,preference)}catch{document.querySelector('#displayModeHint').textContent+='（表示設定を記憶できませんでした）'}
+    });
+  });
+  narrow.addEventListener('change',()=>{if(!preference)apply()});
+  apply();
+})();
+
 // 保存先の読み込みが完了してから画面を初期化します。
 (async function () {
 const persistence = window.schedulePersistence.store;

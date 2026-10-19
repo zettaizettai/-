@@ -188,3 +188,16 @@
 #view-unassigned .service-card:has(> .memo),#view-helpers .service-card:has(> .memo){grid-template-areas:"time main" "time helper" ". memo"}
 #view-unassigned .service-card > .memo,#view-helpers .service-card > .memo{grid-area:memo;margin:2px 0 0;min-width:0;text-align:right}
 
+.display-controls{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.display-controls .button{min-height:44px}
+@media screen{
+  html[data-display-mode="desktop"] .week-grid{grid-template-columns:repeat(7,minmax(170px,1fr));min-width:0;width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:8px}
+  html[data-display-mode="desktop"] .week-grid .day-column{display:block}
+  html[data-display-mode="desktop"] .mobile-day-nav{display:none}
+  html[data-display-mode="mobile"] .week-grid{grid-template-columns:minmax(0,1fr);min-width:0;width:100%}
+  html[data-display-mode="mobile"] .week-grid .day-column{display:none}
+  html[data-display-mode="mobile"] .week-grid .day-column.mobile-selected{display:block}
+  html[data-display-mode="mobile"] .mobile-day-nav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}
+}
+@media print{.display-controls{display:none!important}}
+
