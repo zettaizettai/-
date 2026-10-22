@@ -201,3 +201,59 @@
 }
 @media print{.display-controls{display:none!important}}
 
+/* 複数ヘルパーの週別・ひな形は、表示モードにかかわらず枠内に7日分を収めます。 */
+@media screen{
+  #view-helpers .multi-helper-sheet{container-type:inline-size}
+  #view-helpers .week-grid.multi-helper-inner-week{
+    grid-template-columns:repeat(7,minmax(0,1fr));
+    width:100%;min-width:0;max-width:100%;gap:4px;padding-bottom:0;
+  }
+  #view-helpers .multi-helper-inner-week>.day-column{display:block;min-width:0;padding:4px}
+  #view-helpers .multi-helper-inner-week .day-title{font-size:14px;padding:4px 0;overflow-wrap:anywhere}
+  #view-helpers .multi-helper-inner-week .cards{min-width:0;grid-template-columns:minmax(0,1fr)}
+  #view-helpers .multi-helper-inner-week .service-card{padding:5px 3px;border-left-width:3px}
+}
+@media screen{
+  @container (max-width:560px){
+    #view-helpers .multi-helper-inner-week{gap:2px}
+    #view-helpers .multi-helper-inner-week>.day-column{padding:2px}
+    #view-helpers .multi-helper-inner-week .service-card{padding:4px 2px}
+    #view-helpers .multi-helper-inner-week .service-card>:is(.time,.default-time,.compare-default-time) span{display:block}
+    #view-helpers .multi-helper-inner-week .service-card>:is(.time,.default-time,.compare-default-time) span+span:before{content:none}
+    #view-helpers .multi-helper-inner-week .client{white-space:normal;overflow-wrap:anywhere}
+  }
+}
+
+/* 未割当一覧の印刷 */
+.print-list-heading{display:none}
+@media print{
+  body.print-unassigned-list>section[aria-label="保存状態"],
+  body.print-unassigned-list #view-unassigned,
+  body.print-unassigned-list #view-helpers{display:none!important}
+  body.print-unassigned-list #view-list{display:block!important}
+  body.print-unassigned-list #view-list>.toolbar,
+  body.print-unassigned-list #view-list>.list-tabs,
+  body.print-unassigned-list #view-list>.mobile-day-nav,
+  body.print-unassigned-list #view-list .filter-row,
+  body.print-unassigned-list #view-list .card-select{display:none!important}
+  body.print-unassigned-list .print-list-heading{display:flex;align-items:end;justify-content:space-between;gap:5mm;margin:0 0 5mm;border-bottom:1px solid #9aabb3;padding-bottom:2mm}
+  body.print-unassigned-list .print-list-heading h1{margin:0;font-size:18pt}
+  body.print-unassigned-list .print-list-heading p{margin:0;font-weight:700}
+  body.print-unassigned-list #view-list .panel{border:0;padding:0;background:#fff}
+  body.print-unassigned-list #view-list .week-grid{display:grid!important;grid-template-columns:repeat(7,minmax(0,1fr));min-width:0;gap:3px;overflow:visible}
+  body.print-unassigned-list #view-list .day-column{display:block!important;min-height:0;min-width:0;padding:5px;overflow:visible}
+  body.print-unassigned-list #view-list .day-title{font-size:13pt;padding:4px;margin-bottom:4px}
+  body.print-unassigned-list #view-list .day-title small{display:block!important;font-size:8pt}
+  body.print-unassigned-list #view-list .cards{gap:4px}
+  body.print-unassigned-list #view-list .service-card{break-inside:avoid;box-shadow:none;padding:5px;overflow:visible}
+  body.print-unassigned-list #view-list .client,
+  body.print-unassigned-list #view-list .memo,
+  body.print-unassigned-list #view-list .helper{white-space:normal;overflow:visible;overflow-wrap:anywhere;max-width:100%}
+}
+
+/* カードのドラッグ操作 */
+.service-card[draggable="true"],.all-helper-card[draggable="true"]{cursor:grab}
+.schedule-dragging{opacity:.45;cursor:grabbing!important}
+.schedule-drop-active{outline:3px solid #288774;outline-offset:-3px;background-color:#e1f5ed!important}
+.schedule-drag-hint{margin:8px 0 12px}
+@media print{.schedule-drag-hint{display:none!important}}

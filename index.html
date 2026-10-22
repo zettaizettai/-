@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ヘルパー週間スケジュール</title><link rel="stylesheet" href="style.css?v=20261019-display-switch">
+  <title>ヘルパー週間スケジュール</title><link rel="stylesheet" href="style.css?v=20261022-default-timeline-print">
 </head>
 <body>
   <section style="padding:10px 16px;background:#edf5f1;border-bottom:1px solid #bfd7ce" aria-label="保存状態"><span id="storageStatus" role="status">データを読み込み中…</span><span id="storageRecovery" hidden> <button type="button" id="storageBackup">作業中の内容をバックアップ</button> <button type="button" id="storageReload">最新データを開く</button></span></section>
@@ -24,5 +24,5 @@
   <div class="modal-backdrop hidden" id="serviceModalBackdrop"><div class="modal"><div class="modal-header"><h2 id="serviceModalTitle">サービス詳細</h2><button class="icon-button" data-close-modal="serviceModalBackdrop">×</button></div><div id="serviceModalBody"></div></div></div>
   <div class="modal-backdrop hidden" id="helperModalBackdrop"><div class="modal"><div class="modal-header"><h2>ヘルパー管理</h2><button class="icon-button" data-close-modal="helperModalBackdrop">×</button></div><form id="helperForm" class="inline-form"><input type="hidden" id="helperId"><label>ヘルパー名<input id="helperName" required placeholder="例：田中"></label><button class="button button-primary">追加・保存</button></form><div id="helperList" class="helper-list"></div></div></div>
   <div class="modal-backdrop hidden" id="managerModalBackdrop"><div class="modal"><div class="modal-header"><h2>サ責管理</h2><button class="icon-button" data-close-modal="managerModalBackdrop">×</button></div><form id="managerForm" class="inline-form"><input type="hidden" id="managerId"><label>サ責名<input id="managerName" required placeholder="例：大泉"></label><button class="button button-primary">追加・保存</button></form><div id="managerList" class="helper-list"></div></div></div>
-  <script src="storage.js?v=1"></script><script src="persistence-ui.js?v=1"></script><script src="app.js?v=20261019-display-switch"></script>
+  <script src="storage.js?v=1"></script><script src="persistence-ui.js?v=1"></script><script src="app.js?v=20261022-default-timeline-print"></script>
 </body></html>

@@ -130,7 +130,7 @@ document.querySelector('#view-register').innerHTML=`<div class="toolbar"><div><h
 function replaceClientInput(selector){const input=document.querySelector(selector);if(!input||input.tagName==='SELECT')return;const select=document.createElement('select');select.id=input.id;select.name=input.name||'clientName';select.required=true;select.innerHTML=`<option value="">利用者を選択</option>${clientOptions()}`;input.replaceWith(select)}
 
 function modal(id){const s=state.services.find(x=>x.id===id);if(!s)return;openId=id;const ok=state.helpers.filter(h=>!conflict(s,h.id)),busy=state.helpers.filter(h=>conflict(s,h.id));document.querySelector('#serviceModalTitle').textContent=`${s.clientName}｜${DAYS[s.day]}｜${displayClockTime(s.startTime)}～${displayClockTime(s.endTime)}`;document.querySelector('#serviceModalBody').innerHTML=`<div class="detail"><div class="detail-box">利用者：<b>${esc(s.clientName)}</b><br>状態：${badge(s)}${s.memo?`<br>メモ：${esc(s.memo)}`:''}${s.originalStartTime?`<div class="history">元の時間：${s.originalStartTime}～${s.originalEndTime}</div>`:''}</div><div class="detail-box"><h3>対応可能ヘルパー</h3><div class="availability">${ok.map(h=>`<button class="button button-light" data-assign="${h.id}">○ ${esc(h.name)}<span class="available">対応可能</span></button>`).join('')||'<p class="busy">対応可能なヘルパーはいません</p>'}</div><h3>予定あり</h3><div class="availability">${busy.map(h=>`<button class="button button-light" data-busy="${h.id}">× ${esc(h.name)}<span class="busy">予定あり</span></button>`).join('')||'<p class="history">該当なし</p>'}</div></div><div class="detail-box"><h3>別の処理</h3><div class="form-grid"><button class="button button-light" data-status="unassigned">未対応に戻す</button><button class="button button-light" data-status="manager">サ責対応にする</button><button class="button button-light" data-change>時間変更</button><button class="button button-danger" data-status="cancelled">サービス中止</button></div></div></div>`;document.querySelector('#serviceModalBackdrop').classList.remove('hidden');bindModal()}
-function assign(h,force=false){const s=state.services.find(x=>x.id===openId);if(!s)return;if(conflict(s,h)&&!force){if(confirm('この時間には別の予定があります。OKで既存の予定を未割当にして割り当てます。'))assign(h,true);return}state.services.filter(x=>x.id!==s.id&&x.weekKey===s.weekKey&&x.helperId===h&&x.day===s.day&&overlap(s,x)).forEach(x=>{x.helperId='';x.status='unassigned'});s.helperId=h;s.status='assigned';save();close();render()}
+function assign(h){const s=state.services.find(x=>x.id===openId);if(!s)return;s.helperId=h;s.status='assigned';save();close();render()}
 function changeTime(){const s=state.services.find(x=>x.id===openId),box=document.querySelector('#serviceModalBody .detail');if(!s||!box)return;box.insertAdjacentHTML('beforeend',`<div class="detail-box"><h3>時間変更</h3><p class="history">時間欄にカーソルを置いてホイールを回すと15分ずつ変更できます。</p><div class="form-grid"><label>開始時間<input type="time" id="editStartTime" value="${s.startTime}"></label><label>終了時間<input type="time" id="editEndTime" value="${s.endTime}"></label></div><div class="form-actions"><button class="button button-primary" id="saveChangedTime">変更を保存</button></div></div>`);document.querySelector('#saveChangedTime').onclick=()=>{const a=document.querySelector('#editStartTime').value,b=document.querySelector('#editEndTime').value;if(!a||!b||a>=b){alert('終了時間は開始時間より後にしてください');return}s.originalStartTime=s.originalStartTime||s.startTime;s.originalEndTime=s.originalEndTime||s.endTime;s.startTime=a;s.endTime=b;s.helperId='';s.status='changed';save();close();render();modal(s.id)} }
 function close(){document.querySelectorAll('.modal-backdrop').forEach(x=>x.classList.add('hidden'));openId=null}
 function bind(){document.querySelectorAll('.tab').forEach(x=>x.onclick=()=>{view=x.dataset.view;render()});document.querySelectorAll('[data-id]').forEach(x=>{x.onclick=()=>modal(x.dataset.id);x.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();modal(x.dataset.id)}}});document.querySelectorAll('[data-move]').forEach(x=>x.onclick=()=>{day=(day+Number(x.dataset.move)+7)%7;render()});document.querySelectorAll('[data-list-mode]').forEach(x=>x.onclick=()=>{listMode='default';listWeekKey='';render()});document.querySelectorAll('[data-list-week]').forEach(x=>x.onclick=()=>{listMode='week';listWeekKey=x.dataset.listWeek;render()});const hs=document.querySelector('#helperSelect');if(hs)hs.onchange=()=>{helper=hs.value;render()};const f=document.querySelector('#only');if(f)f.onchange=()=>{only=f.checked;render()};const form=document.querySelector('#serviceForm');if(form)form.onsubmit=e=>{e.preventDefault();const d=new FormData(form),h=d.get('helperId'),s={id:id('s'),weekKey:currentWeekKey(),day:+d.get('day'),startTime:d.get('startTime'),endTime:d.get('endTime'),clientName:d.get('clientName').trim(),helperId:h==='manager'?'':h,memo:d.get('memo').trim(),status:h==='manager'?'manager':h?'assigned':'unassigned'};if(s.startTime>=s.endTime)return alert('終了時間は開始時間より後にしてください');if(h&&h!=='manager'&&conflict(s,h,''))return alert('選択したヘルパーには同じ時間帯の予定があります。未割当で登録するか、時間を変更してください。');state.services.push(s);save();form.reset();alert('サービスを登録しました');render()};const bulk=document.querySelector('[data-bulk]');if(bulk)bulk.onclick=()=>{if(listMode==='week'&&listWeekKey){weekOffset=weekKeyOffset(listWeekKey)}view='unassigned';render()}}
@@ -164,7 +164,7 @@ function weekKeyFromOffset(offset){
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 }
 function reflectionConflicts(key,templates){const conflicts=[];templates.forEach(t=>{if(!t.helperId)return;const templateId=t.templateId||t.id;state.services.filter(s=>s.weekKey===key&&s.templateId!==templateId&&active(s)&&s.helperId===t.helperId&&s.day===t.day&&overlap(t,s)).forEach(s=>conflicts.push({template:t,service:s}))});return conflicts}
-function reflectDefaultToWeek(key){const templates=state.defaultServices||[],conflicts=reflectionConflicts(key,templates);if(conflicts.length){const details=conflicts.map(x=>`・${hname(x.template.helperId)}：${x.template.clientName} ${x.template.startTime}〜${x.template.endTime} ↔ ${x.service.clientName} ${x.service.startTime}〜${x.service.endTime}`).join('\n');if(!confirm(`${weekText(key)}への反映で、以下の予定が重複します。\n\n${details}\n\n重複した予定をそのまま反映しますか？`))return false}let added=0,updated=0;templates.forEach(t=>{const templateId=t.templateId||t.id,existing=state.services.find(s=>s.weekKey===key&&s.templateId===templateId);if(existing){const keepId=existing.id;Object.assign(existing,JSON.parse(JSON.stringify(t)),{id:keepId,templateId,weekKey:key});updated++;return}const copy=JSON.parse(JSON.stringify(t));copy.id=id('s');copy.templateId=templateId;copy.weekKey=key;state.services.push(copy);added++});save();alert(added||updated?`${weekText(key)}へ${added}件を追加、${updated}件を更新しました`:'この週には反映済みです');return true}
+function reflectDefaultToWeek(key){const templates=state.defaultServices||[],conflicts=reflectionConflicts(key,templates);let added=0,updated=0;templates.forEach(t=>{const templateId=t.templateId||t.id,existing=state.services.find(s=>s.weekKey===key&&s.templateId===templateId);if(existing){const keepId=existing.id;Object.assign(existing,JSON.parse(JSON.stringify(t)),{id:keepId,templateId,weekKey:key});updated++;return}const copy=JSON.parse(JSON.stringify(t));copy.id=id('s');copy.templateId=templateId;copy.weekKey=key;state.services.push(copy);added++});save();alert(added||updated?`${weekText(key)}へ${added}件を追加、${updated}件を更新しました`:'この週には反映済みです');return true}
 function renderIndependentList(){const root=document.querySelector('#view-list');if(!root)return;const selected=listWeekKey||currentWeekKey();const weekKeys=[...new Set([currentWeekKey(),...state.services.map(s=>s.weekKey).filter(Boolean)])].sort().reverse();const source=listMode==='default'?(state.defaultServices||[]):state.services;const rows=source.filter(s=>(listMode==='default'||s.weekKey===selected)&&(!only||s.status==='unassigned')).sort((a,b)=>(a.weekKey||'').localeCompare(b.weekKey||'')||a.day-b.day||a.startTime.localeCompare(b.startTime));const tabs=`<div class="list-tabs"><button class="button button-small ${listMode==='default'?'button-primary':'button-light'}" data-independent-default>デフォルト</button><button class="button button-small ${listMode==='week'?'button-primary':'button-light'}" data-independent-week>週別一覧</button></div>`;const weekNav=listMode==='week'?`<div class="week-controls list-week-controls"><button class="button button-light button-small" data-list-week-move="-1">＜ 前週</button><button class="button button-light button-small" data-list-week-move="1">次週 ＞</button></div>`:'';const action=listMode==='week'?`<button class="button button-primary" data-independent-reflect>デフォルトをこの週へ反映</button><button class="button button-light button-small" data-independent-show>この週を週間画面で表示</button>`:`<button class="button button-primary" data-independent-reflect>デフォルトを今週へ反映</button>`;root.innerHTML=`<div class="toolbar"><div><h2>未割当サービス一覧</h2><div class="history">${listMode==='default'?'デフォルト（ひな形）':`週別：${weekText(selected)}`}</div></div><div>${weekNav}${action}<button class="button button-light button-small" data-independent-reset>デフォルト表示に戻す</button></div></div>${tabs}<div class="panel"><div class="filter-row"><label><input type="checkbox" id="only" ${only?'checked':''}> 未対応だけ表示</label><span class="history">週別一覧を編集してもデフォルトには反映されません。</span></div><div class="list-wrap"><table class="schedule-table"><thead><tr><th>週</th><th>曜日</th><th>時間</th><th>利用者名</th><th>状態</th><th>メモ</th></tr></thead><tbody>${rows.map(s=>`<tr class="${listMode==='week'?'clickable':''}" data-independent-id="${s.id}"><td>${weekText(s.weekKey||currentWeekKey())}</td><td>${DAYS[s.day]}</td><td>${displayClockTime(s.startTime)}～${displayClockTime(s.endTime)}</td><td>${esc(s.clientName)}</td><td>${badge(s)}</td><td>${esc(s.memo)}</td></tr>`).join('')||'<tr><td colspan="6" class="empty">対象サービスはありません</td></tr>'}</tbody></table></div></div>`;root.querySelector('#only').onchange=e=>{only=e.target.checked;render()};root.querySelectorAll('[data-independent-id]').forEach(row=>{if(listMode==='week')row.onclick=()=>modal(row.dataset.independentId,'week')});root.querySelector('[data-independent-default]').onclick=()=>{listMode='default';listWeekKey='';render()};root.querySelector('[data-independent-week]').onclick=()=>{listMode='week';listWeekKey=selected;render()};root.querySelector('[data-independent-reset]').onclick=()=>{only=false;listMode='default';listWeekKey='';render()};root.querySelector('[data-independent-reflect]').onclick=()=>{reflectDefaultToWeek(listMode==='week'?selected:currentWeekKey());if(listMode==='default'){listMode='week';listWeekKey=currentWeekKey()}render()};if(listMode==='week'){root.querySelector('[data-independent-show]').onclick=()=>{weekOffset=weekKeyOffset(selected);view='unassigned';render()};root.querySelector('[data-list-week-move="-1"]').onclick=()=>{listWeekKey=weekKeyFromOffset(weekKeyOffset(selected)-1);render()};root.querySelector('[data-list-week-move="1"]').onclick=()=>{listWeekKey=weekKeyFromOffset(weekKeyOffset(selected)+1);render()}}}
 render=function(){baseRenderForIndependentList();renderIndependentList()};
 function validServiceTime(value){if(!value)return false;const [h,m]=value.split(':').map(Number);return h>=7&&h<=19&&m%5===0&&(h<19||m===0)}
@@ -194,7 +194,7 @@ function quickTimeEdit(id){const s=findService(id,'week');if(!s)return;openId=id
 document.addEventListener('click',e=>{const time=e.target.closest('.service-card .time');if(!time)return;e.preventDefault();e.stopImmediatePropagation();quickTimeEdit(time.closest('.service-card').dataset.id)},true);
 
 function helperScheduleGrid(items,source){return`<div class="week-grid">${DAYS.map((name,index)=>{const dayItems=items.filter(s=>s.day===index).sort((a,b)=>a.startTime.localeCompare(b.startTime));return`<div class="day-column ${index===day?'mobile-selected':''}"><div class="day-title">${name}<small>${dateLabel(index)}・${dayItems.length}件</small></div><div class="cards">${dayItems.map(s=>{let html=card(s).replace(`data-id="${s.id}"`,`data-helper-card="${s.id}"`);if(source==='default')html=html.replace('class="time"','class="default-time"');return html}).join('')||'<div class="empty">予定なし</div>'}</div></div>`}).join('')}</div>`}
-function reflectHelperDefaultToWeek(key,helperId){const templates=(state.defaultServices||[]).filter(s=>s.helperId===helperId),conflicts=reflectionConflicts(key,templates);if(conflicts.length){const details=conflicts.map(x=>`・${x.template.clientName} ${x.template.startTime}〜${x.template.endTime} ↔ ${x.service.clientName} ${x.service.startTime}〜${x.service.endTime}`).join('\n');if(!confirm(`${hname(helperId)}さんのデフォルト反映で、以下の予定が重複します。\n\n${details}\n\n重複した予定をそのまま反映しますか？`))return false}templates.forEach(t=>{const templateId=t.templateId||t.id,existing=state.services.find(s=>s.weekKey===key&&s.templateId===templateId);if(existing){const keepId=existing.id;Object.assign(existing,JSON.parse(JSON.stringify(t)),{id:keepId,templateId,weekKey:key});return}const copy=JSON.parse(JSON.stringify(t));copy.id=id('s');copy.templateId=templateId;copy.weekKey=key;state.services.push(copy)});save();return true}
+function reflectHelperDefaultToWeek(key,helperId){const templates=(state.defaultServices||[]).filter(s=>s.helperId===helperId),conflicts=reflectionConflicts(key,templates);templates.forEach(t=>{const templateId=t.templateId||t.id,existing=state.services.find(s=>s.weekKey===key&&s.templateId===templateId);if(existing){const keepId=existing.id;Object.assign(existing,JSON.parse(JSON.stringify(t)),{id:keepId,templateId,weekKey:key});return}const copy=JSON.parse(JSON.stringify(t));copy.id=id('s');copy.templateId=templateId;copy.weekKey=key;state.services.push(copy)});save();return true}
 function renderIndependentHelpers(){const root=document.querySelector('#view-helpers');if(!root)return;const selected=helperWeekKey||currentWeekKey();if(helper==='all'){root.innerHTML=`<div class="toolbar"><h2>ヘルパー別週間スケジュール</h2><label class="helper-picker">表示するヘルパー<select id="helperIndependentSelect"><option value="all">全員</option>${state.helpers.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('')}</select></label></div><div class="panel"><p>ヘルパーを選択すると、デフォルトと週別の予定を確認できます。</p></div>`;root.querySelector('#helperIndependentSelect').value='all';root.querySelector('#helperIndependentSelect').onchange=e=>{helper=e.target.value;helperMode='default';helperWeekKey='';render()};return}const source=helperMode==='default'?(state.defaultServices||[]):state.services;const items=source.filter(s=>s.helperId===helper&&(helperMode==='default'||s.weekKey===selected)&&active(s));const tabs=`<div class="list-tabs"><button class="button button-small ${helperMode==='default'?'button-primary':'button-light'}" data-helper-default>デフォルト</button><button class="button button-small ${helperMode==='week'?'button-primary':'button-light'}" data-helper-week>週別</button></div>`;const weekControls=helperMode==='week'?`<div class="week-controls list-week-controls"><button class="button button-light button-small" data-helper-week-move="-1">＜ 前週</button><button class="button button-light button-small" data-helper-week-move="1">次週 ＞</button></div>`:'';const actions=helperMode==='week'?`<button class="button button-primary" data-helper-reflect>デフォルトをこの週へ反映</button>`:`<button class="button button-primary" data-helper-reflect>デフォルトを今週へ反映</button>`;root.innerHTML=`<div class="toolbar"><div><h2>${esc(hname(helper))}さんの週間スケジュール</h2><div class="history">${helperMode==='default'?'デフォルト（ひな形）':`週別：${weekText(selected)}`}</div></div><label class="helper-picker">ヘルパー<select id="helperIndependentSelect">${state.helpers.map(h=>`<option value="${h.id}" ${h.id===helper?'selected':''}>${esc(h.name)}</option>`).join('')}</select></label><div class="helper-schedule-actions">${weekControls}${actions}<button class="button button-primary" data-open-register="${helper}">この週に予定を追加</button></div></div>${tabs}<div class="panel">${helperScheduleGrid(items,helperMode)}</div>`;root.querySelector('#helperIndependentSelect').onchange=e=>{helper=e.target.value;helperMode='default';helperWeekKey='';render()};root.querySelector('[data-helper-default]').onclick=()=>{helperMode='default';helperWeekKey='';render()};root.querySelector('[data-helper-week]').onclick=()=>{helperMode='week';helperWeekKey=selected;render()};root.querySelector('[data-helper-reflect]').onclick=()=>{reflectHelperDefaultToWeek(helperMode==='week'?selected:currentWeekKey(),helper);if(helperMode==='default'){helperMode='week';helperWeekKey=currentWeekKey()}render()};root.querySelectorAll('[data-helper-card]').forEach(x=>x.onclick=()=>{if(helperMode==='default')defaultModal(x.dataset.helperCard);else modal(x.dataset.helperCard,'week')});if(helperMode==='week'){root.querySelector('[data-helper-week-move="-1"]').onclick=()=>{helperWeekKey=weekKeyFromOffset(weekKeyOffset(selected)-1);render()};root.querySelector('[data-helper-week-move="1"]').onclick=()=>{helperWeekKey=weekKeyFromOffset(weekKeyOffset(selected)+1);render()}}}
 const renderWithIndependentHelpers=render;render=function(){renderWithIndependentHelpers();renderIndependentHelpers()};
 function defaultAddModal(helperId=''){document.querySelector('#serviceModalTitle').textContent='デフォルトサービスを登録';document.querySelector('#serviceModalBody').innerHTML=`<div class="detail"><div class="detail-box"><div class="form-grid"><label>曜日<select id="defaultAddDay">${DAYS.map((x,i)=>`<option value="${i}" ${i===day?'selected':''}>${x}</option>`).join('')}</select></label><label>利用者名<input id="defaultAddClient" required placeholder="例：山田様"></label><label>開始時間<select id="defaultAddStart">${timeOptions('09:00')}</select></label><label>終了時間<select id="defaultAddEnd">${timeOptions('10:00')}</select></label><label>担当ヘルパー<select id="defaultAddHelper"><option value="">未割当</option>${state.helpers.map(h=>`<option value="${h.id}" ${h.id===helperId?'selected':''}>${esc(h.name)}</option>`).join('')}<option value="manager">サ責対応</option></select></label><label>メモ<textarea id="defaultAddMemo" placeholder="支援内容など"></textarea></label></div><div class="form-actions"><button class="button button-primary" id="saveDefaultAdd">デフォルトに登録</button><button class="button button-light" data-close-default-add>キャンセル</button></div></div></div>`;document.querySelector('#serviceModalBackdrop').classList.remove('hidden');document.querySelector('[data-close-default-add]').onclick=close;document.querySelector('#saveDefaultAdd').onclick=()=>{const client=document.querySelector('#defaultAddClient').value.trim(),a=document.querySelector('#defaultAddStart').value,b=document.querySelector('#defaultAddEnd').value,msg=timeRangeMessage(a,b);if(!client||msg)return;const h=document.querySelector('#defaultAddHelper').value;state.defaultServices.push({id:id('s'),templateId:id('t'),day:Number(document.querySelector('#defaultAddDay').value),startTime:a,endTime:b,clientName:client,helperId:h==='manager'?'':h,memo:document.querySelector('#defaultAddMemo').value,status:h==='manager'?'manager':h?'assigned':'unassigned',managerName:h==='manager'?'サ責対応':''});save();close();render()};document.querySelector('#defaultAddClient').focus()}
@@ -222,7 +222,7 @@ function addHelperChoiceButtons(){
     button.type='button';
     button.className=`button button-small ${helper===h.id?'button-primary':'button-light'}`;
     button.textContent=h.name;
-    button.onclick=()=>{helper=h.id;rememberLastOpenedHelper(h.id);helperMode='week';helperWeekKey=currentWeekKey();render()};
+    button.onclick=()=>{helper=h.id;rememberLastOpenedHelper(h.id);if(helperMode!=='default-timeline'){helperMode='week';helperWeekKey=currentWeekKey()}render()};
     wrap.appendChild(button);
   });
   const all=document.createElement('button');
@@ -271,7 +271,7 @@ function withHelperDefaults(callback){
     state.defaultServices=listDefaults;
   }
 }
-function isHelperDefaultView(){return helperMode==='default'&&!!document.querySelector('#view-helpers.active')}
+function isHelperDefaultView(){return ['default','default-timeline'].includes(helperMode)&&!!document.querySelector('#view-helpers.active')}
 
 const sharedRenderIndependentHelpers=renderIndependentHelpers;
 renderIndependentHelpers=function(){return withHelperDefaults(()=>sharedRenderIndependentHelpers())};
@@ -544,18 +544,6 @@ reflectDefaultToWeek=function(weekKey){
 
 reflectHelperDefaultToWeek=function(weekKey,helperId){
   const templates=(state.helperDefaultServices||[]).filter(service=>service.helperId===helperId);
-  const conflicts=[];
-  templates.forEach(template=>{
-    const helperTemplateId=template.templateId||template.id;
-    state.services.filter(service=>service.weekKey===weekKey&&active(service)&&
-      service.helperId===helperId&&service.day===template.day&&overlap(template,service)&&
-      service.helperTemplateId!==helperTemplateId&&service.templateId!==helperTemplateId&&
-      !sameWeekService(service,template,weekKey)).forEach(service=>conflicts.push({template,service}));
-  });
-  if(conflicts.length){
-    const details=conflicts.map(item=>`・${item.template.clientName} ${item.template.startTime}〜${item.template.endTime} ↔ ${item.service.clientName} ${item.service.startTime}〜${item.service.endTime}`).join('\n');
-    if(!confirm(`${hname(helperId)}さんのデフォルト反映で、以下の予定が重複します。\n\n${details}\n\n重複した予定をそのまま反映しますか？`))return false;
-  }
 
   let linkedCount=0;
   templates.forEach(template=>{
@@ -614,7 +602,6 @@ document.addEventListener('click',e=>{
 assign=function(helperId){
   const service=state.services.find(item=>item.id===openId);
   if(!service)return;
-  if(conflict(service,helperId)&&!confirm('同じ時間帯に別の予定があります。重複予定として割り当てますか？'))return;
   service.helperId=helperId;
   service.status='assigned';
   service.managerName='';
@@ -823,7 +810,7 @@ function allHelperScheduleCard(item,columnIndex,columnCount){
   const left=`calc(${columnIndex} * (100% / ${columnCount}) + 3px)`;
   const width=`calc(100% / ${columnCount} - 6px)`;
   const endText=service.endTime?displayClockTime(service.endTime):'未定';
-  return`<div class="all-helper-card${statusClass}${overlapClass}" style="top:${top}px;height:${height}px;left:${left};width:${width}"><div class="all-helper-time">${displayClockTime(service.startTime)}～${endText}</div><div class="all-helper-client">${esc(service.clientName)}</div>${service.memo?`<div class="all-helper-memo">${esc(service.memo)}</div>`:''}${isDayOffReference?'<div class="all-helper-state">休みのため未割当</div>':service.status==='cancelled'?'<div class="all-helper-state">サービス中止</div>':''}</div>`;
+  return`<div class="all-helper-card${statusClass}${overlapClass}" data-schedule-id="${service.id}" style="top:${top}px;height:${height}px;left:${left};width:${width}"><div class="all-helper-time">${displayClockTime(service.startTime)}～${endText}</div><div class="all-helper-client">${esc(service.clientName)}</div>${service.memo?`<div class="all-helper-memo">${esc(service.memo)}</div>`:''}${isDayOffReference?'<div class="all-helper-state">休みのため未割当</div>':service.status==='cancelled'?'<div class="all-helper-state">サービス中止</div>':''}</div>`;
 }
 function allHelperDayItems(helperId,dayIndex,weekKey){
   const normal=state.services.filter(service=>service.weekKey===weekKey&&service.helperId===helperId&&service.day===dayIndex);
@@ -1056,17 +1043,24 @@ function renderClients(){
   });
 }
 
-// 個別ヘルパーにも、週別データと共通のタイムライン表示を追加します。
-function renderIndividualHelperTimeline(){
+// 毎週のひな形は、週別予定や特定の週のお休みとは分けて表示します。
+function helperDefaultDayItems(helperId,dayIndex){
+  return (state.helperDefaultServices||[])
+    .filter(service=>service.helperId===helperId&&service.day===dayIndex)
+    .sort((a,b)=>a.startTime.localeCompare(b.startTime))
+    .map(service=>({service,isDayOffReference:false}));
+}
+// 個別ヘルパーの週別・デフォルトで、同じタイムライン表示を利用します。
+function renderIndividualHelperTimeline(isDefault=false){
   const root=document.querySelector('#view-helpers');
   if(!root||helper==='all')return;
   const selectedWeek=helperWeekKey||currentWeekKey();
-  helperWeekKey=selectedWeek;
-  const dayHeaders=DAYS.map((name,index)=>`<div class="all-helper-head">${listWeekDateLabel(selectedWeek,index)}（${name.charAt(0)}）</div>`).join('');
+  if(!isDefault)helperWeekKey=selectedWeek;
+  const dayHeaders=DAYS.map((name,index)=>`<div class="all-helper-head">${isDefault?name:`${listWeekDateLabel(selectedWeek,index)}（${name.charAt(0)}）`}</div>`).join('');
   const lanes=DAYS.map((name,index)=>{
     const dayOffKey=`${selectedWeek}:${helper}:${index}`;
-    const isDayOff=!!state.helperDaysOff[dayOffKey];
-    const items=layoutAllHelperItems(allHelperDayItems(helper,index,selectedWeek));
+    const isDayOff=!isDefault&&!!state.helperDaysOff[dayOffKey];
+    const items=layoutAllHelperItems(isDefault?helperDefaultDayItems(helper,index):allHelperDayItems(helper,index,selectedWeek));
     const cards=items.map(item=>{
       const html=allHelperScheduleCard(item,item.columnIndex,item.columnCount);
       if(item.isDayOffReference)return html;
@@ -1074,27 +1068,39 @@ function renderIndividualHelperTimeline(){
     }).join('');
     return`<div class="all-helper-lane ${isDayOff?'is-day-off':''}">${isDayOff?'<div class="all-helper-day-off">休み</div>':''}${cards}</div>`;
   }).join('');
-  root.innerHTML=`<div class="toolbar"><div><h2>${esc(hname(helper))}さんの週間タイムライン</h2><div class="history">${weekText(selectedWeek)}</div></div><label class="helper-picker">ヘルパー<select id="helperIndependentSelect">${state.helpers.map(item=>`<option value="${item.id}" ${item.id===helper?'selected':''}>${esc(item.name)}</option>`).join('')}<option value="all">全員</option></select></label><div class="week-controls"><button class="button button-light button-small" data-individual-timeline-week="-1">＜ 前週</button><button class="button button-light button-small" data-individual-timeline-week="1">次週 ＞</button></div></div><div class="list-tabs"><button class="button button-small button-light" data-helper-default>デフォルト</button><button class="button button-small button-light" data-helper-week>週別</button><button class="button button-small button-primary" data-helper-timeline>タイムライン</button></div><div class="all-helper-legend"><span class="legend-free">空き時間</span><span class="legend-scheduled">予定あり</span><span class="legend-overlap">重複</span><span class="legend-day-off">休み</span><span class="legend-cancelled">中止</span></div><div class="all-helper-wrap individual-timeline-wrap"><div class="all-helper-grid individual-timeline-grid" style="--helper-count:7;min-width:1190px"><div class="all-helper-corner">時間</div>${dayHeaders}<div class="all-helper-time-axis">${allHelperTimeAxis()}</div>${lanes}</div></div>`;
+  const weekControls=isDefault?'<button class="button button-primary" data-add-default-timeline>デフォルト予定を追加</button>':`<div class="week-controls"><button class="button button-light button-small" data-individual-timeline-week="-1">＜ 前週</button><button class="button button-light button-small" data-individual-timeline-week="1">次週 ＞</button></div>`;
+  root.innerHTML=`<div class="toolbar"><div><h2>${esc(hname(helper))}さんの${isDefault?'デフォルト':'週間'}タイムライン</h2><div class="history">${isDefault?'毎週のひな形':weekText(selectedWeek)}</div></div><label class="helper-picker">ヘルパー<select id="helperIndependentSelect">${state.helpers.map(item=>`<option value="${item.id}" ${item.id===helper?'selected':''}>${esc(item.name)}</option>`).join('')}<option value="all">全員</option></select></label>${weekControls}</div>
+    <div class="list-tabs"><button class="button button-small button-light" data-helper-default>デフォルト</button><button class="button button-small ${isDefault?'button-primary':'button-light'}" data-helper-default-timeline>デフォルトタイムライン</button><button class="button button-small button-light" data-helper-week>週別</button><button class="button button-small ${isDefault?'button-light':'button-primary'}" data-helper-timeline>週別タイムライン</button></div>
+    <div class="all-helper-legend"><span class="legend-free">空き時間</span><span class="legend-scheduled">予定あり</span><span class="legend-overlap">重複</span>${isDefault?'':'<span class="legend-day-off">休み</span>'}<span class="legend-cancelled">中止</span></div><div class="all-helper-wrap individual-timeline-wrap"><div class="all-helper-grid individual-timeline-grid" style="--helper-count:7;min-width:1190px"><div class="all-helper-corner">時間</div>${dayHeaders}<div class="all-helper-time-axis">${allHelperTimeAxis()}</div>${lanes}</div></div>`;
   root.querySelector('[data-helper-default]').onclick=()=>{helperMode='default';helperWeekKey='';render()};
   root.querySelector('[data-helper-week]').onclick=()=>{helperMode='week';helperWeekKey=selectedWeek;render()};
-  root.querySelector('[data-helper-timeline]').onclick=()=>{};
-  root.querySelector('[data-individual-timeline-week="-1"]').onclick=()=>{helperWeekKey=weekKeyFromOffset(weekKeyOffset(selectedWeek)-1);render()};
-  root.querySelector('[data-individual-timeline-week="1"]').onclick=()=>{helperWeekKey=weekKeyFromOffset(weekKeyOffset(selectedWeek)+1);render()};
+  root.querySelector('[data-helper-timeline]').onclick=()=>{helperMode='timeline';helperWeekKey=selectedWeek;render()};
+  root.querySelector('[data-helper-default-timeline]').onclick=()=>{helperMode='default-timeline';render()};
+  root.querySelector('[data-add-default-timeline]')?.addEventListener('click',()=>defaultAddModal(helper));
+  root.querySelector('[data-individual-timeline-week="-1"]')?.addEventListener('click',()=>{helperWeekKey=weekKeyFromOffset(weekKeyOffset(selectedWeek)-1);render()});
+  root.querySelector('[data-individual-timeline-week="1"]')?.addEventListener('click',()=>{helperWeekKey=weekKeyFromOffset(weekKeyOffset(selectedWeek)+1);render()});
 
-  root.querySelectorAll('[data-individual-timeline-id]').forEach(cardNode=>cardNode.onclick=()=>modal(cardNode.dataset.individualTimelineId));
+  root.querySelectorAll('[data-individual-timeline-id]').forEach(cardNode=>cardNode.onclick=()=>isDefault?defaultModal(cardNode.dataset.individualTimelineId):modal(cardNode.dataset.individualTimelineId));
 }
 const renderIndependentHelpersBeforeTimeline=renderIndependentHelpers;
 renderIndependentHelpers=function(){
-  if(helper!=='all'&&helperMode==='timeline')return renderIndividualHelperTimeline();
+  if(helper!=='all'&&['timeline','default-timeline'].includes(helperMode))return renderIndividualHelperTimeline(helperMode==='default-timeline');
   const result=renderIndependentHelpersBeforeTimeline();
   if(helper==='all')return result;
   const tabs=document.querySelector('#view-helpers .list-tabs');
   if(tabs&&!tabs.querySelector('[data-helper-timeline]')){
     const button=document.createElement('button');
     button.type='button';button.className='button button-small button-light';
-    button.dataset.helperTimeline='';button.textContent='タイムライン';
+    button.dataset.helperTimeline='';button.textContent='週別タイムライン';
     button.onclick=()=>{helperMode='timeline';helperWeekKey=helperWeekKey||currentWeekKey();render()};
     tabs.appendChild(button);
+  }
+  if(tabs&&!tabs.querySelector('[data-helper-default-timeline]')){
+    const button=document.createElement('button');
+    button.type='button';button.className='button button-small button-light';
+    button.dataset.helperDefaultTimeline='';button.textContent='デフォルトタイムライン';
+    button.onclick=()=>{helperMode='default-timeline';render()};
+    tabs.querySelector('[data-helper-default]')?.insertAdjacentElement('afterend',button);
   }
   return result;
 };
@@ -1212,6 +1218,39 @@ render=function(){const result=renderWithHelperPrintTools();addHelperPrintTools(
 window.addEventListener('beforeprint',addHelperPrintTools);
 window.addEventListener('afterprint',()=>document.body.classList.remove('print-helper-schedule'));
 
+// 未割当一覧は、表示中のデフォルト／週別と絞り込みをそのまま印刷します。
+function listPrintCaption(){
+  const period=listMode==='default'?'デフォルト（毎週のひな形）':`週別：${weekText(listWeekKey||currentWeekKey())}`;
+  return `${period}${only?' ／ 未対応のみ':''}`;
+}
+function prepareListPrint(){
+  const isList=!!document.querySelector('#view-list.active');
+  document.body.classList.toggle('print-unassigned-list',isList);
+  if(isList){
+    document.body.classList.remove('print-helper-schedule','print-helper-comparison');
+    addListPrintTools();
+  }
+}
+function addListPrintTools(){
+  const root=document.querySelector('#view-list');
+  if(!root)return;
+  const toolbar=root.querySelector('.toolbar');
+  if(!toolbar)return;
+  if(!toolbar.querySelector('[data-print-list]')){
+    const button=document.createElement('button');
+    button.type='button';button.className='button button-primary button-small';
+    button.dataset.printList='';button.textContent='印刷';
+    button.onclick=()=>{prepareListPrint();window.print()};toolbar.appendChild(button);
+  }
+  let heading=root.querySelector('.print-list-heading');
+  if(!heading){heading=document.createElement('div');heading.className='print-list-heading';root.prepend(heading)}
+  heading.innerHTML=`<h1>未割当サービス一覧</h1><p>${esc(listPrintCaption())}</p>`;
+}
+const renderWithListPrintTools=render;
+render=function(){const result=renderWithListPrintTools();addListPrintTools();return result};
+window.addEventListener('beforeprint',prepareListPrint);
+window.addEventListener('afterprint',()=>document.body.classList.remove('print-unassigned-list'));
+
 // 選択した複数ヘルパーの週別予定を、1行最大2名で比較表示します。
 let comparedHelperIds=[],comparisonSelectionInitialized=false;
 function multiHelperWeekSheet(helperItem,weekKey){
@@ -1286,11 +1325,11 @@ function multiHelperTimelineCard(item,columnIndex,columnCount){
   const endText=service.endTime?displayClockTime(service.endTime):'未定';
   return`<div data-compare-timeline-id="${service.id}" class="all-helper-card compare-timeline-card${statusClass}${overlapClass}" style="top:${top}px;height:${height}px;left:${left};width:${width}"><div class="all-helper-time">${displayClockTime(service.startTime)}～${endText}</div><div class="all-helper-client">${esc(service.clientName)}</div>${isDayOffReference?'<div class="all-helper-state">休み</div>':service.status==='cancelled'?'<div class="all-helper-state">中止</div>':''}</div>`;
 }
-function multiHelperTimelineSheet(helperItem,weekKey){
-  const headers=DAYS.map((dayName,dayIndex)=>`<div class="all-helper-head">${dayName.charAt(0)}<small>${listWeekDateLabel(weekKey,dayIndex)}</small></div>`).join('');
+function multiHelperTimelineSheet(helperItem,weekKey,isDefault=false){
+  const headers=DAYS.map((dayName,dayIndex)=>`<div class="all-helper-head">${dayName.charAt(0)}<small>${isDefault?'デフォルト':listWeekDateLabel(weekKey,dayIndex)}</small></div>`).join('');
   const lanes=DAYS.map((dayName,dayIndex)=>{
-    const isDayOff=!!state.helperDaysOff[`${weekKey}:${helperItem.id}:${dayIndex}`];
-    const items=layoutAllHelperItems(allHelperDayItems(helperItem.id,dayIndex,weekKey));
+    const isDayOff=!isDefault&&!!state.helperDaysOff[`${weekKey}:${helperItem.id}:${dayIndex}`];
+    const items=layoutAllHelperItems(isDefault?helperDefaultDayItems(helperItem.id,dayIndex):allHelperDayItems(helperItem.id,dayIndex,weekKey));
     return`<div class="all-helper-lane ${isDayOff?'is-day-off':''}">${isDayOff?'<div class="all-helper-day-off">休み</div>':''}${items.map(item=>multiHelperTimelineCard(item,item.columnIndex,item.columnCount)).join('')}</div>`;
   }).join('');
   return`<section class="multi-helper-sheet multi-helper-timeline-sheet"><h2>${esc(helperItem.name)}さん</h2><div class="all-helper-grid multi-helper-timeline-grid"><div class="all-helper-corner">時間</div>${headers}<div class="all-helper-time-axis">${allHelperTimeAxis(.6)}</div>${lanes}</div></section>`;
@@ -1302,12 +1341,14 @@ renderMultiHelperWeeks=function(){
   const selectedWeek=helperWeekKey||currentWeekKey();helperWeekKey=selectedWeek;
   const selectedHelpers=comparedHelperIds.map(helperId=>state.helpers.find(item=>item.id===helperId)).filter(Boolean);
   const selectors=state.helpers.map(item=>`<label><input type="checkbox" data-compare-helper="${item.id}" ${comparedHelperIds.includes(item.id)?'checked':''}> ${esc(item.name)}</label>`).join('');
-  const sheetRenderer=helperComparisonView==='default'?item=>multiHelperDefaultSheet(item):helperComparisonView==='timeline'?item=>multiHelperTimelineSheet(item,selectedWeek):item=>multiHelperWeekSheet(item,selectedWeek);
+  const isDefault=['default','default-timeline'].includes(helperComparisonView);
+  const isTimeline=['timeline','default-timeline'].includes(helperComparisonView);
+  const sheetRenderer=isTimeline?item=>multiHelperTimelineSheet(item,selectedWeek,isDefault):isDefault?item=>multiHelperDefaultSheet(item):item=>multiHelperWeekSheet(item,selectedWeek);
   const sheets=selectedHelpers.map(sheetRenderer).join('');
-  const viewTitle=helperComparisonView==='default'?'デフォルト':helperComparisonView==='timeline'?'タイムライン':'週別';
-  const periodText=helperComparisonView==='default'?'毎週のひな形':weekText(selectedWeek);
-  const weekControls=helperComparisonView==='default'?'':`<div class="week-controls"><button class="button button-light button-small" data-compare-week="-1">＜ 前週</button><button class="button button-light button-small" data-compare-week="1">次週 ＞</button></div>`;
-  root.innerHTML=`<div class="print-helper-comparison-heading"><h1>ヘルパー ${viewTitle}</h1><p>${periodText}</p></div><div class="toolbar multi-helper-toolbar"><div><h2>複数ヘルパー表示</h2><div class="history">${viewTitle}・表示するヘルパーを選択</div></div>${weekControls}<button class="button button-primary button-small" data-print-helper-comparison ${comparedHelperIds.length?'':'disabled'}>印刷</button><button class="button button-light button-small" data-close-helper-comparison>通常表示に戻る</button></div><div class="list-tabs multi-helper-view-tabs"><button class="button button-small ${helperComparisonView==='default'?'button-primary':'button-light'}" data-comparison-view="default">デフォルト</button><button class="button button-small ${helperComparisonView==='week'?'button-primary':'button-light'}" data-comparison-view="week">週別</button><button class="button button-small ${helperComparisonView==='timeline'?'button-primary':'button-light'}" data-comparison-view="timeline">タイムライン</button></div><div class="multi-helper-selectors">${selectors||'<span class="history">ヘルパーが登録されていません</span>'}</div><div class="multi-helper-week-grid ${helperComparisonView==='timeline'?'is-timeline':''}">${sheets||'<div class="empty">表示するヘルパーを選択してください</div>'}</div>`;
+  const viewTitle=isDefault?(isTimeline?'デフォルトタイムライン':'デフォルト'):(isTimeline?'週別タイムライン':'週別');
+  const periodText=isDefault?'毎週のひな形':weekText(selectedWeek);
+  const weekControls=isDefault?'':`<div class="week-controls"><button class="button button-light button-small" data-compare-week="-1">＜ 前週</button><button class="button button-light button-small" data-compare-week="1">次週 ＞</button></div>`;
+  root.innerHTML=`<div class="print-helper-comparison-heading"><h1>ヘルパー ${viewTitle}</h1><p>${periodText}</p></div><div class="toolbar multi-helper-toolbar"><div><h2>複数ヘルパー表示</h2><div class="history">${viewTitle}・表示するヘルパーを選択</div></div>${weekControls}<button class="button button-primary button-small" data-print-helper-comparison ${comparedHelperIds.length?'':'disabled'}>印刷</button><button class="button button-light button-small" data-close-helper-comparison>通常表示に戻る</button></div><div class="list-tabs multi-helper-view-tabs"><button class="button button-small ${helperComparisonView==='default'?'button-primary':'button-light'}" data-comparison-view="default">デフォルト</button><button class="button button-small ${helperComparisonView==='default-timeline'?'button-primary':'button-light'}" data-comparison-view="default-timeline">デフォルトタイムライン</button><button class="button button-small ${helperComparisonView==='week'?'button-primary':'button-light'}" data-comparison-view="week">週別</button><button class="button button-small ${helperComparisonView==='timeline'?'button-primary':'button-light'}" data-comparison-view="timeline">週別タイムライン</button></div><div class="multi-helper-selectors">${selectors||'<span class="history">ヘルパーが登録されていません</span>'}</div><div class="multi-helper-week-grid ${isTimeline?'is-timeline':''}">${sheets||'<div class="empty">表示するヘルパーを選択してください</div>'}</div>`;
   root.querySelectorAll('[data-comparison-view]').forEach(button=>button.onclick=()=>{helperComparisonView=button.dataset.comparisonView;render()});
   root.querySelectorAll('[data-compare-helper]').forEach(checkbox=>checkbox.onchange=()=>{if(checkbox.checked){if(!comparedHelperIds.includes(checkbox.dataset.compareHelper))comparedHelperIds.push(checkbox.dataset.compareHelper)}else comparedHelperIds=comparedHelperIds.filter(helperId=>helperId!==checkbox.dataset.compareHelper);render()});
   root.querySelector('[data-compare-week="-1"]')?.addEventListener('click',()=>{helperWeekKey=weekKeyFromOffset(weekKeyOffset(selectedWeek)-1);render()});
@@ -1316,7 +1357,7 @@ renderMultiHelperWeeks=function(){
   root.querySelector('[data-print-helper-comparison]').onclick=()=>{document.body.classList.remove('print-helper-schedule');document.body.classList.add('print-helper-comparison');window.print()};
   root.querySelectorAll('[data-compare-default]').forEach(cardNode=>cardNode.onclick=()=>withHelperDefaults(()=>defaultModal(cardNode.dataset.id)));
   root.querySelectorAll('.multi-helper-sheet .service-card:not([data-compare-default])').forEach(cardNode=>cardNode.onclick=()=>modal(cardNode.dataset.id));
-  root.querySelectorAll('[data-compare-timeline-id]').forEach(cardNode=>cardNode.onclick=()=>modal(cardNode.dataset.compareTimelineId));
+  root.querySelectorAll('[data-compare-timeline-id]').forEach(cardNode=>cardNode.onclick=()=>isDefault?withHelperDefaults(()=>defaultModal(cardNode.dataset.compareTimelineId)):modal(cardNode.dataset.compareTimelineId));
 };
 
 // ヘルパー別タブは初回に先頭、以降は最後に開いた個別ヘルパーを週別で表示します。
@@ -1468,6 +1509,105 @@ render=function(){
   });
   return result;
 };
+
+// ドラッグ元と移動先は表示中のデータ種別を保持し、ひな形と週別を混同しません。
+let scheduleDrag=null, suppressScheduleClickUntil=0;
+function transferScheduleCard(sourceKey,serviceId,target,copy=false,startMinutes=null){
+  const source=state[sourceKey],service=source?.find(item=>item.id===serviceId);
+  if(!service||target.source!==sourceKey||!Number.isInteger(target.day)||target.day<0||target.day>6)return false;
+  const next=JSON.parse(JSON.stringify(service));
+  next.day=target.day;
+  if(sourceKey==='services')next.weekKey=target.weekKey;
+  if(target.helperId!==null&&target.helperId!==undefined&&target.helperId!==next.helperId){
+    next.helperId=target.helperId;next.managerName='';
+    if(next.status!=='cancelled')next.status=next.helperId?'assigned':'unassigned';
+  }
+  if(sourceKey==='services'&&next.helperId&&isHelperDayOff(next.helperId,next.day,next.weekKey))return false;
+  if(startMinutes!==null){
+    if(!service.startTime)return false;
+    const duration=service.endTime?effectiveEndMinutes(service)-effectiveStartMinutes(service):null;
+    const format=minutes=>`${String(Math.floor(minutes/60)).padStart(2,'0')}:${String(minutes%60).padStart(2,'0')}`;
+    next.startTime=format(startMinutes);
+    next.endTime=duration===null?'':format(startMinutes+duration);
+    if(timeRangeMessage(next.startTime,next.endTime))return false;
+  }
+  if(copy){
+    next.id=id('s');
+    // コピーを元のひな形とリンクさせると、次回反映時に上書きされるため切り離します。
+    ['templateId','listTemplateId','helperTemplateId','originalStartTime','originalEndTime'].forEach(key=>delete next[key]);
+    if(sourceKey!=='services')next.templateId=next.id;
+    source.push(next);
+  }else Object.assign(service,next);
+  save();render();return true;
+}
+function bindScheduleDragAndDrop(){
+  const root=document.querySelector('.view.active');
+  if(!root||!['view-unassigned','view-helpers','view-list'].includes(root.id))return;
+  const isHelper=root.id==='view-helpers';
+  const isDefault=isHelper?(['default','default-timeline'].includes(helperMode)||helperMode==='compare'&&['default','default-timeline'].includes(helperComparisonView)):root.id==='view-list'&&listMode==='default';
+  const source=isDefault?(isHelper?'helperDefaultServices':'defaultServices'):'services';
+  const weekKey=isHelper?(helperWeekKey||currentWeekKey()):root.id==='view-list'?(listWeekKey||currentWeekKey()):currentWeekKey();
+  const sheets=[...root.querySelectorAll('.multi-helper-sheet')];
+  root.querySelectorAll('.day-column,.all-helper-lane').forEach(column=>{
+    const timeline=column.classList.contains('all-helper-lane');
+    const siblings=[...column.parentElement.children].filter(node=>node.classList.contains(timeline?'all-helper-lane':'day-column'));
+    const index=siblings.indexOf(column),sheet=column.closest('.multi-helper-sheet');
+    const allHelpers=isHelper&&helper==='all'&&helperMode!=='compare';
+    const helperId=!isHelper?null:sheet?comparedHelperIds[sheets.indexOf(sheet)]:allHelpers?state.helpers[index]?.id:helper;
+    const target={source,weekKey,day:allHelpers?day:index,helperId};
+    column.scheduleDropTarget=target;
+    column.dataset.scheduleDrop='';
+    column.querySelectorAll('.service-card,.all-helper-card').forEach(node=>{
+      if(node.matches('.day-off-reference,.day-off-service'))return;
+      const serviceId=node.dataset.id||node.dataset.helperCard||node.dataset.scheduleId||node.dataset.compareTimelineId||node.dataset.individualTimelineId;
+      if(!state[source]?.some(item=>item.id===serviceId))return;
+      node.draggable=true;node.title='ドラッグで移動・Ctrlキーを押しながらドロップでコピー';
+      node.ondragstart=event=>{
+        if(event.target.closest('button,input,textarea,select')){event.preventDefault();return}
+        scheduleDrag={source,id:serviceId,offset:timeline?(event.clientY-node.getBoundingClientRect().top)/(column.getBoundingClientRect().height/900):0};
+        event.dataTransfer.effectAllowed='copyMove';event.dataTransfer.setData('text/plain',serviceId);
+        node.classList.add('schedule-dragging');
+      };
+      node.ondragend=clearScheduleDrag;
+    });
+    column.ondragover=event=>{
+      if(!scheduleDrag||scheduleDrag.source!==source)return;
+      const service=state[source].find(item=>item.id===scheduleDrag.id);
+      const assignedHelper=helperId===null?service?.helperId:helperId;
+      if(source==='services'&&assignedHelper&&isHelperDayOff(assignedHelper,target.day,weekKey))return;
+      event.preventDefault();event.dataTransfer.dropEffect=event.ctrlKey?'copy':'move';
+      root.querySelectorAll('.schedule-drop-active').forEach(node=>node.classList.remove('schedule-drop-active'));
+      column.classList.add('schedule-drop-active');
+    };
+    column.ondragleave=event=>{if(!column.contains(event.relatedTarget))column.classList.remove('schedule-drop-active')};
+    column.ondrop=event=>{
+      if(!scheduleDrag)return;
+      event.preventDefault();event.stopPropagation();
+      const drag=scheduleDrag;
+      let start=null;
+      if(timeline){
+        const rect=column.getBoundingClientRect();
+        start=Math.round((420+(event.clientY-rect.top)/(rect.height/900)-drag.offset)/5)*5;
+      }
+      clearScheduleDrag();
+      transferScheduleCard(drag.source,drag.id,target,event.ctrlKey,start);
+    };
+  });
+  if(root.querySelector('[draggable="true"]')&&!root.querySelector('.schedule-drag-hint')){
+    const hint=document.createElement('p');hint.className='history schedule-drag-hint';
+    hint.textContent='カードをドラッグして移動 ／ Ctrlキーを押しながらドロップでコピー（タイムラインは5分刻み）';
+    root.querySelector('.toolbar')?.insertAdjacentElement('afterend',hint);
+  }
+}
+function clearScheduleDrag(){
+  scheduleDrag=null;suppressScheduleClickUntil=Date.now()+250;
+  document.querySelectorAll('.schedule-dragging,.schedule-drop-active').forEach(node=>node.classList.remove('schedule-dragging','schedule-drop-active'));
+}
+document.addEventListener('click',event=>{
+  if(Date.now()<suppressScheduleClickUntil&&event.target.closest('.service-card,.all-helper-card,.day-title')){event.preventDefault();event.stopImmediatePropagation()}
+},true);
+const renderBeforeScheduleDrag=render;
+render=function(){const result=renderBeforeScheduleDrag();bindScheduleDragAndDrop();return result};
 
 // 初期描画は、すべての画面処理とイベント登録を準備してから1回だけ行います。
 await persistence.idle();
