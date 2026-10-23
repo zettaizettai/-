@@ -34,7 +34,7 @@
     };
   }
   function createStore(adapter, notify = () => {}) {
-    let revision, ready = false, blocked = false, pending = 0;
+    let revision, ready = false, blocked = false, pending = 0, generation = 0;
     let tail = Promise.resolve(true);
     return {
       async load() {
@@ -52,7 +52,7 @@
         let snapshot;
         try { snapshot = JSON.parse(JSON.stringify(validate(data))); }
         catch (error) { blocked = true; notify('error', error); return Promise.resolve(false); }
-        pending++; notify('saving');
+        generation++; pending++; notify('saving');
         tail = tail.then(async () => {
           if (blocked) { pending--; return false; }
           try {
@@ -66,6 +66,18 @@
         return tail;
       },
       idle() { return tail; },
+      get revision() { return revision; },
+      async refresh(canApply = () => true) {
+        if (!ready || blocked || pending || !canApply()) return null;
+        const before = generation;
+        const result = await adapter.load();
+        if (blocked || pending || generation !== before || !canApply()) return null;
+        if (result.revision === revision) return null;
+        validate(result.data);
+        revision = result.revision;
+        notify('updated');
+        return result.data;
+      },
       get unsaved() { return pending > 0 || blocked; },
       subscribe(callback) { return adapter.subscribe?.(callback) || (() => {}); },
     };

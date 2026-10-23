@@ -188,6 +188,12 @@
 #view-unassigned .service-card:has(> .memo),#view-helpers .service-card:has(> .memo){grid-template-areas:"time main" "time helper" ". memo"}
 #view-unassigned .service-card > .memo,#view-helpers .service-card > .memo{grid-area:memo;margin:2px 0 0;min-width:0;text-align:right}
 
+.auth-panel{max-width:420px;margin:40px auto;padding:24px;background:#fff;border:1px solid #dce5eb;border-radius:12px}
+.auth-panel h1{font-size:22px}.auth-panel form{display:grid;gap:16px}.auth-panel p{line-height:1.6}
+.account-bar{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:12px;padding:8px 16px;background:#edf5f1;overflow-wrap:anywhere}
+[hidden]{display:none!important}
+.auth-pending .app-header,.auth-pending main,.auth-pending .modal-backdrop{display:none!important}
+@media print{.auth-panel,.account-bar{display:none!important}}
 .display-controls{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px}
 .display-controls .button{min-height:44px}
 @media screen{

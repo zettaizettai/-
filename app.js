@@ -30,14 +30,16 @@
 
 // 保存先の読み込みが完了してから画面を初期化します。
 (async function () {
+await window.schedulePersistence.ready;
 const persistence = window.schedulePersistence.store;
 const loadedState = await persistence.load();
 const KEY='care-schedule-v1', DAYS=['月曜日','火曜日','水曜日','木曜日','金曜日','土曜日','日曜日'];
 const STATUS={unassigned:'未対応',assigned:'ヘルパー決定',manager:'サ責対応',changed:'時間変更',cancelled:'サービス中止'};
 const IMPORTED_CLIENT_NAMES=[];
 let weekOffset=0;
+let helperDefaultsContext=null;
 let state=load();
-window.schedulePersistence.bind(()=>state);
+window.schedulePersistence.bind(()=>snapshotState(),data=>{state=data;render()});
 if(!Array.isArray(state.defaultServices)){
   state.defaultServices=JSON.parse(JSON.stringify(state.services));
   state.defaultServices.forEach(service=>{service.templateId=service.id});
@@ -54,7 +56,7 @@ if(!Array.isArray(state.clients)){
     .map(name=>({id:id('c'),name}));
 }
 let importedClientsAdded=false;
-IMPORTED_CLIENT_NAMES.forEach(name=>{
+(window.schedulePersistence.isCloud?[]:IMPORTED_CLIENT_NAMES).forEach(name=>{
   if(!state.clients.some(client=>client.name===name)){
     state.clients.push({id:id('c'),name,reading:'',address:'',phone:''});
     importedClientsAdded=true;
@@ -81,7 +83,8 @@ function weekText(key){const [y,m,d]=key.split('-').map(Number),start=new Date(y
 function id(p){return p+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7)}
 function initial(){return {helpers:[],services:[],clients:[],managers:[]}}
 function load(){const x=loadedState;if(x&&Array.isArray(x.helpers)&&Array.isArray(x.services)){x.services.forEach(s=>{if(!s.weekKey)s.weekKey=currentWeekKey();if(!s.status)s.status=s.helperId?'assigned':'unassigned'});if(!Array.isArray(x.defaultServices)){x.defaultServices=JSON.parse(JSON.stringify(x.services));x.defaultServices.forEach(s=>{s.templateId=s.id})}x.defaultServices.forEach(s=>{if(!s.status)s.status=s.helperId?'assigned':'unassigned'});return x}return initial()}
-function save(){return persistence.save(state)}
+function snapshotState(){return helperDefaultsContext?{...state,defaultServices:helperDefaultsContext.listDefaults,helperDefaultServices:state.defaultServices}:state}
+function save(){return persistence.save(snapshotState())}
 function sourceServices(source='week'){return source==='default'?state.defaultServices:state.services}
 function findService(serviceId,source=openSource){return sourceServices(source).find(s=>s.id===serviceId)}
 function hname(x){return state.helpers.find(h=>h.id===x)?.name||''}
@@ -263,12 +266,15 @@ const renderWithCancelledHelperCards=render;render=function(){renderWithCancelle
 // 「未割当サービス一覧」と「ヘルパー別」でデフォルト予定を共有しないための分離層。
 // 既存の画面処理はそのまま利用し、ヘルパー別画面の操作中だけ専用配列へ接続します。
 function withHelperDefaults(callback){
+  if(helperDefaultsContext)return callback();
   const listDefaults=state.defaultServices;
+  helperDefaultsContext={listDefaults};
   state.defaultServices=state.helperDefaultServices;
   try{return callback()}
   finally{
     state.helperDefaultServices=state.defaultServices;
     state.defaultServices=listDefaults;
+    helperDefaultsContext=null;
   }
 }
 function isHelperDefaultView(){return ['default','default-timeline'].includes(helperMode)&&!!document.querySelector('#view-helpers.active')}
@@ -464,7 +470,7 @@ async function restoreScheduleBackup(file){
     const restored=parsed&&parsed.format==='care-schedule-backup'?parsed.data:parsed;
     if(!isValidBackupState(restored))throw new Error('invalid backup');
     const helperCount=restored.helpers.length,serviceCount=restored.services.length;
-    if(!confirm(`現在のデータをバックアップ内容で置き換えます。\n\nヘルパー：${helperCount}名\n予定：${serviceCount}件\n\n復元してよろしいですか？`))return;
+    if(!confirm(`${window.schedulePersistence.isCloud?'全職員が共有するデータ':'現在のデータ'}をバックアップ内容で置き換えます。\n\nヘルパー：${helperCount}名\n予定：${serviceCount}件\n\n復元してよろしいですか？`))return;
     if(!await persistence.save(restored))return;
     state=restored;
     alert('バックアップを復元しました。画面を再読み込みします。');
@@ -1612,4 +1618,5 @@ render=function(){const result=renderBeforeScheduleDrag();bindScheduleDragAndDro
 // 初期描画は、すべての画面処理とイベント登録を準備してから1回だけ行います。
 await persistence.idle();
 render();
+window.schedulePersistence.started();
 })().catch(error=>window.schedulePersistence.fail(error));

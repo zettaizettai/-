@@ -1,10 +1,22 @@
 <!doctype html>
-<html lang="ja">
+<html lang="ja" class="auth-pending">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ヘルパー週間スケジュール</title><link rel="stylesheet" href="style.css?v=20261022-default-timeline-print">
+  <title>ヘルパー週間スケジュール</title><link rel="stylesheet" href="style.css?v=20261022-cloud">
 </head>
 <body>
+  <section id="authPanel" class="auth-panel" aria-label="ログイン">
+    <h1>ヘルパー週間スケジュール</h1>
+    <p>登録された職員のアカウントでログインしてください。</p>
+    <form id="loginForm">
+      <label>メールアドレス<input id="loginEmail" type="email" autocomplete="username" required></label>
+      <label>パスワード<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+      <button class="button button-primary" id="loginSubmit" type="submit">ログイン</button>
+    </form>
+    <p id="authMessage" role="status">接続を準備しています…</p>
+    <p class="history">アカウントの追加・パスワードの再設定は管理者に依頼してください。</p>
+  </section>
+  <div class="account-bar" id="accountBar" hidden><span id="accountEmail"></span><button type="button" class="button button-light" id="signOut">ログアウト</button></div>
   <section style="padding:10px 16px;background:#edf5f1;border-bottom:1px solid #bfd7ce" aria-label="保存状態"><span id="storageStatus" role="status">データを読み込み中…</span><span id="storageRecovery" hidden> <button type="button" id="storageBackup">作業中の内容をバックアップ</button> <button type="button" id="storageReload">最新データを開く</button></span></section>
   <header class="app-header"><div><p class="eyebrow">介護事業所向け</p><h1>ヘルパー週間スケジュール</h1></div><div class="app-header-actions"><button class="button button-light" id="backupData">バックアップ保存</button><button class="button button-light" id="restoreData">バックアップ復元</button><button class="button button-light" id="openManagerManager">サ責管理</button><button class="button button-light" id="openHelperManager">ヘルパー管理</button><input class="hidden" id="restoreDataFile" type="file" accept="application/json,.json"></div></header>
   <main class="container">
@@ -24,5 +36,10 @@
   <div class="modal-backdrop hidden" id="serviceModalBackdrop"><div class="modal"><div class="modal-header"><h2 id="serviceModalTitle">サービス詳細</h2><button class="icon-button" data-close-modal="serviceModalBackdrop">×</button></div><div id="serviceModalBody"></div></div></div>
   <div class="modal-backdrop hidden" id="helperModalBackdrop"><div class="modal"><div class="modal-header"><h2>ヘルパー管理</h2><button class="icon-button" data-close-modal="helperModalBackdrop">×</button></div><form id="helperForm" class="inline-form"><input type="hidden" id="helperId"><label>ヘルパー名<input id="helperName" required placeholder="例：田中"></label><button class="button button-primary">追加・保存</button></form><div id="helperList" class="helper-list"></div></div></div>
   <div class="modal-backdrop hidden" id="managerModalBackdrop"><div class="modal"><div class="modal-header"><h2>サ責管理</h2><button class="icon-button" data-close-modal="managerModalBackdrop">×</button></div><form id="managerForm" class="inline-form"><input type="hidden" id="managerId"><label>サ責名<input id="managerName" required placeholder="例：大泉"></label><button class="button button-primary">追加・保存</button></form><div id="managerList" class="helper-list"></div></div></div>
-  <script src="storage.js?v=1"></script><script src="persistence-ui.js?v=1"></script><script src="app.js?v=20261022-default-timeline-print"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js?v=20261022-cloud"></script>
+  <script src="storage.js?v=20261022-cloud"></script>
+  <script src="supabase-adapter.js?v=20261022-cloud"></script>
+  <script src="persistence-ui.js?v=20261022-cloud"></script>
+  <script src="app.js?v=20261022-cloud"></script>
 </body></html>
