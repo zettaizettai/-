@@ -65,7 +65,10 @@ let importedClientsAdded=false;
 if(importedClientsAdded)save();
 
 let view='unassigned',day=0,helper='all',only=false,showAssigned=true;
-let weeklyClientFilter='all',weeklyManagerFilter='all';
+let weeklyClientFilters=new Set(),weeklyStaffFilters=new Set();
+let listClientFilters=new Set(),listStaffFilters=new Set();
+let weeklySortOrder='time',listSortOrder='time';
+let helperTabsScrollLeft=0;
 let openId=null,openSource='week',returnView='unassigned';
 let listMode='default',listWeekKey='',helperMode='default',helperWeekKey='';
 function weekStart(offset=weekOffset){
@@ -115,18 +118,56 @@ if(!Array.isArray(state.managers)){
 function badge(s){return`<span class="status-badge ${s.status}">${STATUS[s.status]}</span>`}
 function hasDisplayOverlap(s){return active(s)&&!!s.helperId&&state.services.some(x=>x.id!==s.id&&active(x)&&x.weekKey===s.weekKey&&x.helperId===s.helperId&&x.day===s.day&&overlap(s,x))}
 function nav(){return`<div class="mobile-day-nav"><button class="button button-light button-small" data-move="-1">＜ 前の日</button><strong>${DAYS[day]}</strong><button class="button button-light button-small" data-move="1">次の日 ＞</button></div>`}
-function grid(fn=s=>true){return`<div class="week-grid">${DAYS.map((d,i)=>`<div class="day-column ${i===day?'mobile-selected':''}"><div class="day-title">${d}<small>${dateLabel(i)}・${state.services.filter(s=>weekMatch(s)&&s.day===i&&fn(s)).length}件</small></div><div class="cards">${state.services.filter(s=>weekMatch(s)&&s.day===i&&fn(s)).sort((a,b)=>a.startTime.localeCompare(b.startTime)).map(card).join('')||'<div class="empty">予定なし</div>'}</div></div>`).join('')}</div>`}
-function weeklyClientNames(){return[...new Set([...state.clients.map(client=>client.name),...state.services.map(service=>service.clientName)].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ja'))}
-function weeklyManagerNames(){return[...new Set(state.services.filter(service=>service.status==='manager').map(service=>service.managerName||'サ責対応'))].sort((a,b)=>a.localeCompare(b,'ja'))}
-function weeklyScheduleVisible(service){
-  const statusVisible=service.status==='cancelled'||service.status==='manager'||(!service.helperId&&(service.status==='unassigned'||service.status==='changed'))||(showAssigned&&!!service.helperId&&service.status==='assigned');
-  if(!statusVisible)return false;
-  if(weeklyClientFilter!=='all'&&service.clientName!==weeklyClientFilter)return false;
-  if(weeklyManagerFilter!=='all'&&(service.status!=='manager'||(service.managerName||'サ責対応')!==weeklyManagerFilter))return false;
+function grid(fn=s=>true,sortOrder='time'){return`<div class="week-grid">${DAYS.map((d,i)=>`<div class="day-column ${i===day?'mobile-selected':''}"><div class="day-title">${d}<small>${dateLabel(i)}・${state.services.filter(s=>weekMatch(s)&&s.day===i&&fn(s)).length}件</small></div><div class="cards">${sortScheduleItems(state.services.filter(s=>weekMatch(s)&&s.day===i&&fn(s)),sortOrder).map(card).join('')||'<div class="empty">予定なし</div>'}</div></div>`).join('')}</div>`}
+function weeklyClientNames(services=state.services){return[...new Set([...state.clients.map(client=>client.name),...services.map(service=>service.clientName)].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ja'))}
+function sortScheduleItems(items,order='time'){
+  const byTime=(a,b)=>String(a.startTime||'').localeCompare(String(b.startTime||''));
+  if(order!=='name')return [...items].sort(byTime);
+  const readings=new Map(state.clients.map(client=>[client.name,normalizeClientReading(client.reading||client.name)]));
+  const collator=new Intl.Collator('ja',{sensitivity:'base',numeric:true});
+  return [...items].sort((a,b)=>collator.compare(readings.get(a.clientName)||a.clientName,readings.get(b.clientName)||b.clientName)||collator.compare(a.clientName,b.clientName)||byTime(a,b));
+}
+function scheduleSortControl(id,order){
+  return `<label>並び順<select id="${id}" data-schedule-sort title="利用者名順は登録済みの読み仮名を優先し、同じ利用者の予定は時間順に並びます"><option value="time" ${order==='time'?'selected':''}>時間が早い順</option><option value="name" ${order==='name'?'selected':''}>利用者名順</option></select></label>`;
+}
+function weeklyStaffOptions(services=state.services){
+  const managers=[...new Set([...state.managers.map(item=>item.name),...services.filter(service=>service.status==='manager').map(service=>managerDisplayName(service.managerName||'サ責対応'))])].sort((a,b)=>a.localeCompare(b,'ja'));
+  return [...managers.map(name=>({value:`manager:${name}`,label:`${name}（サ責）`})),...[...state.helpers].sort((a,b)=>a.name.localeCompare(b.name,'ja')).map(item=>({value:`helper:${item.id}`,label:`${item.name}（ヘルパー）`}))];
+}
+function weeklyFilterControl(id,label,options,selected){
+  const caption=selected.size?`${selected.size}名選択中`:'すべて';
+  return `<details class="weekly-multi-filter" id="${id}"><summary>${label}：${caption}</summary><div class="weekly-filter-panel"><button type="button" class="button button-light button-small" data-weekly-filter-clear="${id}">選択を解除（すべて表示）</button><div class="weekly-filter-options" role="group" aria-label="${label}の絞り込み">${options.map(option=>`<label><input type="checkbox" data-weekly-filter="${id}" value="${esc(option.value)}" ${selected.has(option.value)?'checked':''}><span>${esc(option.label)}</span></label>`).join('')||'<p class="history">選択できる候補がありません</p>'}</div></div></details>`;
+}
+function refreshWeeklyFilter(id,value){
+  const previous=document.getElementById(id);
+  const scrollTop=previous?.querySelector('.weekly-filter-options')?.scrollTop||0;
+  render();
+  const control=document.getElementById(id);
+  if(!control)return;
+  control.open=true;
+  control.querySelector('.weekly-filter-options').scrollTop=scrollTop;
+  const focused=value===undefined?control.querySelector('[data-weekly-filter-clear]'):[...control.querySelectorAll('[data-weekly-filter]')].find(input=>input.value===value);
+  focused?.focus({preventScroll:true});
+}
+function scheduleMatchesPeople(service,clients,staff){
+  if(clients.size&&!clients.has(service.clientName))return false;
+  const staffKey=service.helperId?`helper:${service.helperId}`:service.status==='manager'?`manager:${managerDisplayName(service.managerName||'サ責対応')}`:'';
+  if(staff.size&&!staff.has(staffKey))return false;
   return true;
 }
+function weeklyScheduleVisible(service){
+  const statusVisible=service.status==='cancelled'||service.status==='manager'||(!service.helperId&&(service.status==='unassigned'||service.status==='changed'))||(showAssigned&&!!service.helperId&&(service.status==='assigned'||service.status==='changed'));
+  return statusVisible&&scheduleMatchesPeople(service,weeklyClientFilters,weeklyStaffFilters);
+}
+function scheduleFilterSelection(id){
+  return {weeklyClientFilter:weeklyClientFilters,weeklyStaffFilter:weeklyStaffFilters,listClientFilter:listClientFilters,listStaffFilter:listStaffFilters}[id];
+}
+function listPeopleFilters(){
+  const services=[...state.defaultServices,...state.services];
+  return `<div class="weekly-filters">${weeklyFilterControl('listClientFilter','利用者',weeklyClientNames(services).map(name=>({value:name,label:name})),listClientFilters)}${weeklyFilterControl('listStaffFilter','担当者（サ責・ヘルパー）',weeklyStaffOptions(services),listStaffFilters)}${scheduleSortControl('listSortOrder',listSortOrder)}</div><span class="notice">利用者・担当者を複数選択できます。未選択の欄はすべて表示します</span>`;
+}
 function render(){document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));document.querySelector('#view-'+view).classList.add('active');document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.view===view));document.querySelector('#summary').innerHTML=`<span class="summary-label">${weekLabel()}の状況</span>`+Object.keys(STATUS).map(k=>`<div class="summary-item"><strong>${state.services.filter(s=>weekMatch(s)&&s.status===k).length}</strong>${STATUS[k]}</div>`).join('');
-document.querySelector('#view-unassigned').innerHTML=`<div class="toolbar"><h2>未割当サービス週間</h2><div class="week-controls"><button class="button button-light button-small" data-week-move="-1">＜ 前週</button><button class="button button-light button-small" data-week-move="1">次週 ＞</button></div><div class="weekly-filters"><label>利用者<select id="weeklyClientFilter"><option value="all">すべて</option>${weeklyClientNames().map(name=>`<option value="${esc(name)}" ${weeklyClientFilter===name?'selected':''}>${esc(name)}</option>`).join('')}</select></label><label>サ責<select id="weeklyManagerFilter"><option value="all">すべて</option>${weeklyManagerNames().map(name=>`<option value="${esc(name)}" ${weeklyManagerFilter===name?'selected':''}>${esc(name)}</option>`).join('')}</select></label><label class="filter-row"><input type="checkbox" id="showAssigned" ${showAssigned?'checked':''}> 担当決定済みも表示</label></div><span class="notice">利用者名・サ責名で予定を絞り込めます</span></div>${nav()}${grid(weeklyScheduleVisible)}`;
+document.querySelector('#view-unassigned').innerHTML=`<div class="toolbar"><h2>未割当サービス週間</h2><div class="week-controls"><button class="button button-light button-small" data-week-move="-1">＜ 前週</button><button class="button button-light button-small" data-week-move="1">次週 ＞</button></div><div class="weekly-filters">${weeklyFilterControl('weeklyClientFilter','利用者',weeklyClientNames().map(name=>({value:name,label:name})),weeklyClientFilters)}${weeklyFilterControl('weeklyStaffFilter','担当者（サ責・ヘルパー）',weeklyStaffOptions(),weeklyStaffFilters)}${scheduleSortControl('weeklySortOrder',weeklySortOrder)}<label class="filter-row"><input type="checkbox" id="showAssigned" ${showAssigned?'checked':''}> 担当決定済みも表示</label></div><span class="notice">利用者・担当者を複数選択できます。未選択の欄はすべて表示します</span></div>${nav()}${grid(weeklyScheduleVisible,weeklySortOrder)}`;
 document.querySelector('#view-helpers').innerHTML=`<div class="toolbar"><h2>ヘルパー別週間スケジュール</h2><label class="helper-picker">表示するヘルパー<select id="helperSelect"><option value="all">全員</option>${state.helpers.map(x=>`<option value="${x.id}" ${x.id===helper?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label></div>${helper==='all'?`<div class="panel"><p>ヘルパーを選択すると、その人の予定と空き状況を確認できます。</p>${grid(s=>active(s)&&s.status!=='unassigned')}</div>`:`<div class="panel"><h3>${esc(hname(helper))}さんの予定</h3>${nav()}${grid(s=>s.helperId===helper&&active(s))}</div>`}`;
 const weekKeys=[...new Set([currentWeekKey(),...state.services.map(s=>s.weekKey).filter(Boolean)])].sort().reverse();const rows=state.services.filter(s=>(listMode==='default'||s.weekKey===listWeekKey)&&(!only||s.status==='unassigned')).sort((a,b)=>(a.weekKey||'').localeCompare(b.weekKey||'')||a.day-b.day||a.startTime.localeCompare(b.startTime));const listTabs=`<div class="list-tabs"><button class="button button-small ${listMode==='default'?'button-primary':'button-light'}" data-list-mode="default">デフォルト</button>${weekKeys.map(k=>`<button class="button button-small ${listMode==='week'&&listWeekKey===k?'button-primary':'button-light'}" data-list-week="${k}">${weekText(k)}</button>`).join('')}</div>`;document.querySelector('#view-list').innerHTML=`<div class="toolbar"><div><h2>未割当サービス一覧</h2><div class="history">${listMode==='default'?'全週のサービス':'表示中の週：'+weekText(listWeekKey)}</div></div><div><button class="button button-primary" data-bulk>${listMode==='week'?'この週を週間画面で表示':'一覧を週間画面で表示'}</button><button class="button button-light button-small" data-list-default>デフォルト表示に戻す</button></div></div>${listTabs}<div class="panel"><div class="filter-row"><label><input type="checkbox" id="only" ${only?'checked':''}> 未対応だけ表示</label><span class="history">※登録したサービスは削除するまで残ります</span></div><div class="list-wrap"><table class="schedule-table"><thead><tr><th>週</th><th>曜日</th><th>時間</th><th>利用者名</th><th>状態</th><th>メモ</th></tr></thead><tbody>${rows.map(s=>`<tr class="clickable" data-id="${s.id}"><td>${weekText(s.weekKey||currentWeekKey())}</td><td>${DAYS[s.day]}</td><td>${displayClockTime(s.startTime)}～${displayClockTime(s.endTime)}</td><td>${esc(s.clientName)}</td><td>${badge(s)}</td><td>${esc(s.memo)}</td></tr>`).join('')||'<tr><td colspan="6" class="empty">対象サービスはありません</td></tr>'}</tbody></table></div></div>`;
 document.querySelector('#view-register').innerHTML=`<div class="toolbar"><div><h2>サービス登録</h2><div class="history">登録先：${weekLabel()}</div></div></div><form id="serviceForm" class="form-card"><div class="form-grid"><label>曜日<select name="day">${DAYS.map((x,i)=>`<option value="${i}">${x}</option>`).join('')}</select></label><label>利用者名<input name="clientName" required placeholder="例：山田様"></label><label>開始時間<input type="time" name="startTime" value="09:00" required></label><label>終了時間<input type="time" name="endTime" value="10:00" required></label><label>担当ヘルパー<select name="helperId"><option value="">未割当</option>${state.helpers.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')}<option value="manager">サ責対応</option></select></label><label>メモ<textarea name="memo" placeholder="支援内容など"></textarea></label></div><div class="form-actions"><button class="button button-primary">サービスを登録</button></div></form>`;renderClients();replaceClientInput('#serviceForm input[name="clientName"]');bind()}
@@ -138,7 +179,35 @@ function changeTime(){const s=state.services.find(x=>x.id===openId),box=document
 function close(){document.querySelectorAll('.modal-backdrop').forEach(x=>x.classList.add('hidden'));openId=null}
 function bind(){document.querySelectorAll('.tab').forEach(x=>x.onclick=()=>{view=x.dataset.view;render()});document.querySelectorAll('[data-id]').forEach(x=>{x.onclick=()=>modal(x.dataset.id);x.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();modal(x.dataset.id)}}});document.querySelectorAll('[data-move]').forEach(x=>x.onclick=()=>{day=(day+Number(x.dataset.move)+7)%7;render()});document.querySelectorAll('[data-list-mode]').forEach(x=>x.onclick=()=>{listMode='default';listWeekKey='';render()});document.querySelectorAll('[data-list-week]').forEach(x=>x.onclick=()=>{listMode='week';listWeekKey=x.dataset.listWeek;render()});const hs=document.querySelector('#helperSelect');if(hs)hs.onchange=()=>{helper=hs.value;render()};const f=document.querySelector('#only');if(f)f.onchange=()=>{only=f.checked;render()};const form=document.querySelector('#serviceForm');if(form)form.onsubmit=e=>{e.preventDefault();const d=new FormData(form),h=d.get('helperId'),s={id:id('s'),weekKey:currentWeekKey(),day:+d.get('day'),startTime:d.get('startTime'),endTime:d.get('endTime'),clientName:d.get('clientName').trim(),helperId:h==='manager'?'':h,memo:d.get('memo').trim(),status:h==='manager'?'manager':h?'assigned':'unassigned'};if(s.startTime>=s.endTime)return alert('終了時間は開始時間より後にしてください');if(h&&h!=='manager'&&conflict(s,h,''))return alert('選択したヘルパーには同じ時間帯の予定があります。未割当で登録するか、時間を変更してください。');state.services.push(s);save();form.reset();alert('サービスを登録しました');render()};const bulk=document.querySelector('[data-bulk]');if(bulk)bulk.onclick=()=>{if(listMode==='week'&&listWeekKey){weekOffset=weekKeyOffset(listWeekKey)}view='unassigned';render()}}
 function bindModal(){document.querySelectorAll('[data-assign]').forEach(x=>x.onclick=()=>assign(x.dataset.assign));document.querySelectorAll('[data-busy]').forEach(x=>x.onclick=()=>assign(x.dataset.busy));document.querySelectorAll('[data-status]').forEach(x=>x.onclick=()=>{const s=state.services.find(a=>a.id===openId),previousHelper=s.helperId;s.status=x.dataset.status;if(x.dataset.status!=='cancelled')s.helperId='';if(x.dataset.status==='manager')s.managerName='サ責対応';else if(x.dataset.status!=='cancelled')s.managerName='';else s.helperId=previousHelper;save();close();render()});document.querySelectorAll('[data-manager]').forEach(x=>x.onclick=()=>{const s=state.services.find(a=>a.id===openId);s.status='manager';s.helperId='';s.managerName=x.dataset.manager;save();close();render()});const c=document.querySelector('[data-change]');if(c)c.onclick=changeTime}
-document.addEventListener('change',e=>{if(e.target.id==='showAssigned'){showAssigned=e.target.checked;render()}if(e.target.id==='weeklyClientFilter'){weeklyClientFilter=e.target.value;render()}if(e.target.id==='weeklyManagerFilter'){weeklyManagerFilter=e.target.value;render()}});
+document.addEventListener('change',e=>{
+  if(e.target.matches('[data-schedule-sort]')){
+    const order=e.target.value==='name'?'name':'time',controlId=e.target.id;
+    if(controlId==='weeklySortOrder')weeklySortOrder=order;
+    else if(controlId==='listSortOrder')listSortOrder=order;
+    else return;
+    render();document.getElementById(controlId)?.focus({preventScroll:true});return;
+  }
+  if(e.target.id==='showAssigned'){showAssigned=e.target.checked;render()}
+  const filterId=e.target.dataset.weeklyFilter;
+  if(!filterId)return;
+  const selected=scheduleFilterSelection(filterId);
+  if(!selected)return;
+  if(e.target.checked)selected.add(e.target.value);else selected.delete(e.target.value);
+  refreshWeeklyFilter(filterId,e.target.value);
+});
+document.addEventListener('click',e=>{
+  const clear=e.target.closest('[data-weekly-filter-clear]');
+  if(clear){
+    const filterId=clear.dataset.weeklyFilterClear;
+    scheduleFilterSelection(filterId)?.clear();
+    refreshWeeklyFilter(filterId);
+  }
+  document.querySelectorAll('.weekly-multi-filter[open]').forEach(control=>{if(!control.contains(e.target)&&!clear)control.open=false});
+});
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape')return;
+  document.querySelectorAll('.weekly-multi-filter[open]').forEach(control=>{control.open=false;if(control.contains(document.activeElement))control.querySelector('summary').focus()});
+});
 document.addEventListener('click',e=>{const b=e.target.closest('[data-week-move]');if(b){weekOffset+=Number(b.dataset.weekMove);render()}});
 document.addEventListener('click',e=>{const b=e.target.closest('[data-list-default]');if(b){only=false;listMode='default';listWeekKey='';render()}});
 // 登録時にweekKeyを直接設定するため、後付けの補正処理は不要です。
@@ -220,13 +289,19 @@ function addHelperChoiceButtons(){
   const wrap=document.createElement('div');
   wrap.className='helper-choice-buttons';
   wrap.setAttribute('aria-label','表示するヘルパー');
+  const rail=document.createElement('div');
+  rail.className='helper-choice-scroll';
+  rail.setAttribute('role','group');rail.setAttribute('aria-label','ヘルパー選択（左右にスクロールできます）');
+  wrap.appendChild(rail);
   state.helpers.forEach(h=>{
     const button=document.createElement('button');
     button.type='button';
     button.className=`button button-small ${helper===h.id?'button-primary':'button-light'}`;
     button.textContent=h.name;
+    button.title=h.name;
+    button.dataset.helperChoice=h.id;
     button.onclick=()=>{helper=h.id;rememberLastOpenedHelper(h.id);if(helperMode!=='default-timeline'){helperMode='week';helperWeekKey=currentWeekKey()}render()};
-    wrap.appendChild(button);
+    rail.appendChild(button);
   });
   const all=document.createElement('button');
   all.type='button';
@@ -236,14 +311,25 @@ function addHelperChoiceButtons(){
   wrap.appendChild(all);
   select.dataset.replaced='true';
   select.replaceWith(wrap);
+  requestAnimationFrame(()=>{
+    if(!rail.isConnected||!rail.clientWidth)return;
+    rail.scrollLeft=helperTabsScrollLeft;
+    const selected=rail.querySelector('.button-primary');
+    if(selected){
+      const bounds=rail.getBoundingClientRect(),tab=selected.getBoundingClientRect();
+      if(tab.left<bounds.left+4)rail.scrollLeft-=bounds.left+4-tab.left;
+      else if(tab.right>bounds.right-4)rail.scrollLeft+=tab.right-bounds.right+4;
+    }
+    helperTabsScrollLeft=rail.scrollLeft;
+  });
 }
-const renderWithHelperChoiceButtons=render;render=function(){renderWithHelperChoiceButtons();addHelperChoiceButtons()};
+const renderWithHelperChoiceButtons=render;render=function(){const rail=document.querySelector('#view-helpers .helper-choice-scroll');if(rail?.clientWidth)helperTabsScrollLeft=rail.scrollLeft;renderWithHelperChoiceButtons();addHelperChoiceButtons()};
 function addHelperAbsenceTools(){const root=document.querySelector('#view-helpers');if(!root||helper==='all'||helperMode!=='week'||root.querySelector('[data-helper-absence]'))return;const toolbar=root.querySelector('.toolbar');if(!toolbar)return;const box=document.createElement('div');box.className='helper-absence-tools';box.innerHTML=`<div class="helper-day-buttons" aria-label="対象曜日">${DAYS.map((name,index)=>`<button type="button" class="button button-small ${day===index?'button-primary':'button-light'}" data-helper-day="${index}">${name.replace('曜日','')}</button>`).join('')}</div><button type="button" class="button button-danger button-small" data-helper-absence>この曜日を一括で未割当にする</button>`;toolbar.insertAdjacentElement('afterend',box);box.querySelectorAll('[data-helper-day]').forEach(button=>button.onclick=()=>{day=Number(button.dataset.helperDay);render()});box.querySelector('[data-helper-absence]').onclick=()=>{const selectedWeek=helperWeekKey||currentWeekKey(),targets=state.services.filter(s=>s.weekKey===selectedWeek&&s.helperId===helper&&s.day===day&&active(s));if(!targets.length){alert('対象の予定はありません');return}if(!confirm(`${hname(helper)}さんの${DAYS[day]}の予定${targets.length}件を未割当にしますか？`))return;targets.forEach(s=>{s.helperId='';s.status='unassigned';s.managerName='' });save();render()}}
 const renderWithHelperAbsenceTools=render;render=function(){renderWithHelperAbsenceTools();addHelperAbsenceTools()};
 const originalHelperAbsenceTools=addHelperAbsenceTools;addHelperAbsenceTools=function(){originalHelperAbsenceTools();const root=document.querySelector('#view-helpers'),button=root?.querySelector('[data-helper-absence]');if(!button)return;button.textContent='お休み';button.onclick=()=>{const selectedWeek=helperWeekKey||currentWeekKey(),key=`${selectedWeek}:${helper}:${day}`,targets=state.services.filter(s=>s.weekKey===selectedWeek&&s.helperId===helper&&s.day===day&&active(s));if(targets.length&&!confirm(`${hname(helper)}さんを${DAYS[day]}お休みにしますか？\n${targets.length}件の予定を未割当に変更します。`))return;state.helperDaysOff[key]=true;targets.forEach(s=>{s.helperId='';s.status='unassigned';s.managerName='' });save();render()}};const renderWithUpdatedAbsenceTools=render;render=function(){renderWithUpdatedAbsenceTools();markHelperDaysOff()};function markHelperDaysOff(){if(helper==='all'||helperMode!=='week')return;const selectedWeek=helperWeekKey||currentWeekKey();document.querySelectorAll('#view-helpers .day-column').forEach((column,index)=>{const key=`${selectedWeek}:${helper}:${index}`,title=column.querySelector('.day-title');if(state.helperDaysOff[key]&&title&&!title.querySelector('.day-off-label'))title.insertAdjacentHTML('beforeend','<span class="day-off-label">休み</span>')})}render();
 function listWeekDateLabel(key,index){const [y,m,d]=key.split('-').map(Number),date=new Date(y,m-1,d+index);return`${date.getMonth()+1}/${date.getDate()}`}
-function listScheduleGrid(items,source,key){return`<div class="week-grid">${DAYS.map((name,index)=>{const dayItems=items.filter(s=>s.day===index).sort((a,b)=>a.startTime.localeCompare(b.startTime));return`<div class="day-column ${index===day?'mobile-selected':''}"><div class="day-title">${listWeekDateLabel(key,index)}（${name.charAt(0)}）<small>${dayItems.length}件</small></div><div class="cards">${dayItems.map(s=>{let html=card(s);if(source==='default')html=html.replace('class="time"','class="default-time"');return html}).join('')||'<div class="empty">予定なし</div>'}</div></div>`}).join('')}</div>`}
-const originalRenderIndependentList=renderIndependentList;renderIndependentList=function(){const root=document.querySelector('#view-list');if(!root)return;const selected=listWeekKey||currentWeekKey(),source=listMode==='default'?(state.defaultServices||[]):state.services,items=source.filter(s=>(listMode==='default'||s.weekKey===selected)&&(!only||s.status==='unassigned'));const tabs=`<div class="list-tabs"><button class="button button-small ${listMode==='default'?'button-primary':'button-light'}" data-independent-default>デフォルト</button><button class="button button-small ${listMode==='week'?'button-primary':'button-light'}" data-independent-week>週別一覧</button></div>`;const weekNav=listMode==='week'?`<div class="week-controls list-week-controls"><button class="button button-light button-small" data-list-week-move="-1">＜ 前週</button><button class="button button-light button-small" data-list-week-move="1">次週 ＞</button></div>`:'';const actions=listMode==='week'?`<button class="button button-primary" data-independent-reflect>デフォルトをこの週へ反映</button><button class="button button-light button-small" data-independent-show>この週を週間画面で表示</button>`:`<button class="button button-primary" data-independent-reflect>デフォルトを今週へ反映</button>`;root.innerHTML=`<div class="toolbar"><div><h2>未割当サービス一覧</h2><div class="history">${listMode==='default'?'デフォルト（ひな形）':`週別：${weekText(selected)}`}</div></div><div class="list-toolbar-actions">${weekNav}${actions}<button class="button button-light button-small" data-independent-reset>デフォルト表示に戻す</button></div></div>${tabs}<div class="panel"><div class="filter-row"><label><input type="checkbox" id="only" ${only?'checked':''}> 未対応だけ表示</label><span class="history">週別一覧を編集してもデフォルトには反映されません。</span></div>${listScheduleGrid(items,listMode,selected)}</div>`;root.querySelector('#only').onchange=e=>{only=e.target.checked;render()};root.querySelectorAll('.service-card').forEach(node=>{node.onclick=()=>{if(node.querySelector('.default-time'))defaultModal(node.dataset.id);else modal(node.dataset.id,'week')}});root.querySelector('[data-independent-default]').onclick=()=>{listMode='default';listWeekKey='';render()};root.querySelector('[data-independent-week]').onclick=()=>{listMode='week';listWeekKey=selected;render()};root.querySelector('[data-independent-reset]').onclick=()=>{only=false;listMode='default';listWeekKey='';render()};root.querySelector('[data-independent-reflect]').onclick=()=>{reflectDefaultToWeek(listMode==='week'?selected:currentWeekKey());if(listMode==='default'){listMode='week';listWeekKey=currentWeekKey()}render()};if(listMode==='week'){root.querySelector('[data-independent-show]').onclick=()=>{weekOffset=weekKeyOffset(selected);view='unassigned';render()};root.querySelector('[data-list-week-move="-1"]').onclick=()=>{listWeekKey=weekKeyFromOffset(weekKeyOffset(selected)-1);render()};root.querySelector('[data-list-week-move="1"]').onclick=()=>{listWeekKey=weekKeyFromOffset(weekKeyOffset(selected)+1);render()}}};
+function listScheduleGrid(items,source,key){return`<div class="week-grid">${DAYS.map((name,index)=>{const dayItems=sortScheduleItems(items.filter(s=>s.day===index),listSortOrder);return`<div class="day-column ${index===day?'mobile-selected':''}"><div class="day-title">${listWeekDateLabel(key,index)}（${name.charAt(0)}）<small>${dayItems.length}件</small></div><div class="cards">${dayItems.map(s=>{let html=card(s);if(source==='default')html=html.replace('class="time"','class="default-time"');return html}).join('')||'<div class="empty">予定なし</div>'}</div></div>`}).join('')}</div>`}
+const originalRenderIndependentList=renderIndependentList;renderIndependentList=function(){const root=document.querySelector('#view-list');if(!root)return;const selected=listWeekKey||currentWeekKey(),source=listMode==='default'?(state.defaultServices||[]):state.services,items=source.filter(s=>(listMode==='default'||s.weekKey===selected)&&(!only||s.status==='unassigned')&&scheduleMatchesPeople(s,listClientFilters,listStaffFilters));const tabs=`<div class="list-tabs"><button class="button button-small ${listMode==='default'?'button-primary':'button-light'}" data-independent-default>デフォルト</button><button class="button button-small ${listMode==='week'?'button-primary':'button-light'}" data-independent-week>週別一覧</button></div>`;const weekNav=listMode==='week'?`<div class="week-controls list-week-controls"><button class="button button-light button-small" data-list-week-move="-1">＜ 前週</button><button class="button button-light button-small" data-list-week-move="1">次週 ＞</button></div>`:'';const actions=listMode==='week'?`<button class="button button-primary" data-independent-reflect>デフォルトをこの週へ反映</button><button class="button button-light button-small" data-independent-show>この週を週間画面で表示</button>`:`<button class="button button-primary" data-independent-reflect>デフォルトを今週へ反映</button>`;root.innerHTML=`<div class="toolbar"><div><h2>未割当サービス一覧</h2><div class="history">${listMode==='default'?'デフォルト（ひな形）':`週別：${weekText(selected)}`}</div></div><div class="list-toolbar-actions">${weekNav}${actions}<button class="button button-light button-small" data-independent-reset>デフォルト表示に戻す</button></div>${listPeopleFilters()}</div>${tabs}<div class="panel"><div class="filter-row"><label><input type="checkbox" id="only" ${only?'checked':''}> 未対応だけ表示</label><span class="history">週別一覧を編集してもデフォルトには反映されません。</span></div>${listScheduleGrid(items,listMode,selected)}</div>`;root.querySelector('#only').onchange=e=>{only=e.target.checked;render()};root.querySelectorAll('.service-card').forEach(node=>{node.onclick=()=>{if(node.querySelector('.default-time'))defaultModal(node.dataset.id);else modal(node.dataset.id,'week')}});root.querySelector('[data-independent-default]').onclick=()=>{listMode='default';listWeekKey='';render()};root.querySelector('[data-independent-week]').onclick=()=>{listMode='week';listWeekKey=selected;render()};root.querySelector('[data-independent-reset]').onclick=()=>{only=false;listMode='default';listWeekKey='';render()};root.querySelector('[data-independent-reflect]').onclick=()=>{reflectDefaultToWeek(listMode==='week'?selected:currentWeekKey());if(listMode==='default'){listMode='week';listWeekKey=currentWeekKey()}render()};if(listMode==='week'){root.querySelector('[data-independent-show]').onclick=()=>{weekOffset=weekKeyOffset(selected);view='unassigned';render()};root.querySelector('[data-list-week-move="-1"]').onclick=()=>{listWeekKey=weekKeyFromOffset(weekKeyOffset(selected)-1);render()};root.querySelector('[data-list-week-move="1"]').onclick=()=>{listWeekKey=weekKeyFromOffset(weekKeyOffset(selected)+1);render()}}};
 function addMultiSelectTools(){['#view-unassigned','#view-helpers','#view-list'].forEach(selector=>{const root=document.querySelector(selector);if(!root||!root.classList.contains('active'))return;const cards=[...root.querySelectorAll('.service-card')];if(!cards.length)return;cards.forEach(cardNode=>{if(cardNode.querySelector('[data-card-select]'))return;const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.className='card-select';checkbox.dataset.cardSelect='';checkbox.dataset.selectId=cardNode.dataset.id||cardNode.dataset.helperCard;checkbox.title='この予定を選択';checkbox.onclick=e=>e.stopPropagation();cardNode.appendChild(checkbox)});const toolbar=root.querySelector('.toolbar');if(!toolbar||toolbar.querySelector('[data-delete-selected]'))return;const button=document.createElement('button');button.type='button';button.className='button button-danger button-small';button.dataset.deleteSelected='';button.textContent='選択した予定を削除';button.onclick=()=>{const selected=[...root.querySelectorAll('[data-card-select]:checked')];if(!selected.length)return alert('削除する予定を選択してください');if(!confirm(`選択した${selected.length}件の予定を削除しますか？`))return;selected.forEach(check=>{const node=check.closest('.service-card'),isDefault=!!node.querySelector('.default-time'),idValue=check.dataset.selectId;if(isDefault)state.defaultServices=state.defaultServices.filter(s=>s.id!==idValue);else state.services=state.services.filter(s=>s.id!==idValue)});save();render()};toolbar.appendChild(button)})}
 const renderWithMultiSelectTools=render;render=function(){renderWithMultiSelectTools();addMultiSelectTools()};
 function resizeDayNote(note){note.style.height='auto';note.style.height=`${Math.max(54,note.scrollHeight)}px`}
@@ -257,7 +343,7 @@ document.addEventListener('click',e=>{const title=e.target.closest('#view-unassi
 document.addEventListener('click',e=>{const title=e.target.closest('#view-helpers .day-title');if(!title||helper==='all')return;const column=title.closest('.day-column');if(!column)return;day=[...column.parentElement.children].indexOf(column);if(helperMode==='default')defaultAddModal(helper);else quickAddModal(helper,helperWeekKey||currentWeekKey())},true);
 document.addEventListener('click',e=>{const title=e.target.closest('#view-list .day-title');if(!title)return;const column=title.closest('.day-column');if(!column)return;day=[...column.parentElement.children].indexOf(column);if(listMode==='default')defaultAddModal('');else quickAddModal('',listWeekKey||currentWeekKey())},true);
 function addCancelledHelperCards(){if(helper==='all'||helperMode!=='week')return;const selected=helperWeekKey||currentWeekKey();DAYS.forEach((name,index)=>{const column=document.querySelectorAll('#view-helpers .day-column')[index],cards=column?.querySelector('.cards');if(!cards)return;state.services.filter(s=>s.weekKey===selected&&s.day===index&&s.helperId===helper&&s.status==='cancelled').sort((a,b)=>a.startTime.localeCompare(b.startTime)).forEach(s=>{if(cards.querySelector(`[data-id="${s.id}"]`))return;cards.insertAdjacentHTML('beforeend',card(s))})});document.querySelectorAll('#view-helpers .service-card[data-id]').forEach(node=>{if(node.dataset.cancelBound)return;node.dataset.cancelBound='true';node.onclick=()=>modal(node.dataset.id)})}
-const originalDefaultAddModal=defaultAddModal;defaultAddModal=function(helperId=''){originalDefaultAddModal(helperId);replaceClientInput('#defaultAddClient')};
+const originalDefaultAddModal=defaultAddModal;defaultAddModal=function(helperId=''){originalDefaultAddModal(helperId);makeClientNameInputEditable('#defaultAddClient','defaultClientCandidates')};
 function addWeeklyReflectButton(){const toolbar=document.querySelector('#view-unassigned .toolbar');if(!toolbar||toolbar.querySelector('[data-week-reflect]'))return;const button=document.createElement('button');button.type='button';button.className='button button-primary';button.dataset.weekReflect='';button.textContent='デフォルトをこの週へ反映';button.onclick=()=>{if(reflectDefaultToWeek(currentWeekKey()))render()};toolbar.appendChild(button)}
 function removeWeeklyListMode(){const root=document.querySelector('#view-list');if(!root)return;root.querySelectorAll('[data-independent-week],[data-list-week],[data-list-week-move],[data-independent-show],[data-independent-reflect]').forEach(node=>node.remove());root.querySelector('.list-tabs')?.remove()}
 const renderWithWeeklyTools=render;render=function(){listMode='default';listWeekKey='';renderWithWeeklyTools();addWeeklyReflectButton();removeWeeklyListMode()};
@@ -1149,7 +1235,8 @@ if(managerForm)managerForm.onsubmit=event=>{
     if(manager){
       const oldName=manager.name;manager.name=managerName;
       [state.services,state.defaultServices,state.helperDefaultServices].forEach(items=>items.forEach(service=>{if(service.status==='manager'&&managerDisplayName(service.managerName)===oldName)service.managerName=managerName}));
-      if(weeklyManagerFilter===oldName)weeklyManagerFilter=managerName;
+      if(weeklyStaffFilters.delete(`manager:${oldName}`))weeklyStaffFilters.add(`manager:${managerName}`);
+      if(listStaffFilters.delete(`manager:${oldName}`))listStaffFilters.add(`manager:${managerName}`);
     }
   }else state.managers.push({id:id('m'),name:managerName});
   save();managerForm.reset();document.querySelector('#managerId').value='';renderManagers();

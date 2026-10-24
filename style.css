@@ -55,6 +55,17 @@
 
 .day-title{cursor:pointer}.day-title:hover{background:#dcecf2;border-radius:6px}
 .weekly-filters{display:flex;align-items:end;gap:8px;flex-wrap:wrap}.weekly-filters label{min-width:150px}.weekly-filters .filter-row{min-width:auto;align-self:center}.weekly-filters select{font:inherit;border:1px solid #bdccd4;border-radius:6px;padding:8px;background:#fff;color:var(--text);width:100%}
+.weekly-multi-filter{position:relative;max-width:100%;font-size:13px}
+.weekly-multi-filter summary{cursor:pointer;border:1px solid #bdccd4;border-radius:6px;padding:11px;background:#fff;min-height:42px;font-weight:700}
+.weekly-multi-filter[open]{z-index:6}
+.weekly-filter-panel{position:absolute;top:calc(100% + 5px);left:0;width:300px;max-width:calc(100vw - 48px);padding:10px;border:1px solid var(--line);border-radius:8px;background:white;box-shadow:0 6px 20px #18354a25}
+.weekly-filter-panel>button{width:100%;margin-bottom:6px}
+.weekly-filter-options{max-height:280px;overflow:auto;overscroll-behavior:contain}
+.weekly-filters .weekly-filter-options label{display:flex;align-items:center;gap:9px;padding:9px 6px;min-width:0;cursor:pointer;font-weight:400}
+.weekly-filter-options label:hover{background:#eaf1f4}
+.weekly-filter-options input{width:18px;height:18px;flex:0 0 18px;margin:0;accent-color:var(--blue)}
+.weekly-filter-options span{overflow-wrap:anywhere}
+.weekly-multi-filter summary:focus-visible,.weekly-filter-options input:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .service-card.overlap{background:#eadcf6!important;border-left:5px solid var(--purple)!important;box-shadow:0 0 0 2px #b993d8 inset}
 .service-card.cancelled.overlap{background:#ffbfc4!important;border-left-color:#b94a48!important;box-shadow:0 0 0 2px #e09a9d inset}
 .service-card.day-off-service{background:#59636b!important;color:#fff!important;border-left:0!important;box-shadow:none!important;opacity:1;pointer-events:none}.service-card.day-off-service .time,.service-card.day-off-service .client,.service-card.day-off-service .helper,.service-card.day-off-service .memo{color:#fff!important}.day-off-service-label{margin-top:4px;padding-top:4px;border-top:1px solid #ffffff66;color:#fff;font-size:11px;font-weight:800}
@@ -183,6 +194,15 @@
   .helper-choice-buttons .button{min-width:72px;padding:8px 12px}
 }
 @media (prefers-reduced-motion:reduce){.tab{transition:none}}
+
+/* ヘルパータブは最大8人分を1行に表示し、続きは横スクロールします。 */
+@media screen{
+  #view-helpers .helper-picker:has(.helper-choice-buttons){min-width:0;max-width:100%}
+  .helper-choice-buttons{flex-wrap:nowrap;align-items:flex-start;max-width:100%}
+  .helper-choice-scroll{display:flex;flex:0 1 auto;width:max-content;min-width:0;max-width:832px;gap:8px;padding:4px 4px 10px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;scrollbar-color:#91aabd #eaf0f4}
+  .helper-choice-scroll>.button{flex:0 0 96px;min-width:0;white-space:normal;overflow-wrap:anywhere;padding:8px}
+  .helper-choice-buttons>.button{flex:0 0 auto;margin-top:4px}
+}
 
 /* 週間・ヘルパー別カードのメモは担当者の次の行に配置します。 */
 #view-unassigned .service-card:has(> .memo),#view-helpers .service-card:has(> .memo){grid-template-areas:"time main" "time helper" ". memo"}
