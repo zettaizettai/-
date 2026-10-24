@@ -101,6 +101,8 @@
 .multi-helper-sheet .service-card-main .client{display:block;width:100%;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .multi-helper-timeline-sheet{overflow:auto}.multi-helper-timeline-grid{grid-template-columns:45px repeat(7,minmax(82px,1fr));grid-template-rows:auto 540px;min-width:650px}.multi-helper-timeline-grid .all-helper-time-axis,.multi-helper-timeline-grid .all-helper-lane{height:540px}.multi-helper-timeline-grid .all-helper-head small{display:block;font-size:9px;font-weight:500}.multi-helper-timeline-grid .all-helper-lane{background:repeating-linear-gradient(to bottom,#eef8f1 0,#eef8f1 17px,#d9e6dd 18px,#eef8f1 19px,#eef8f1 35px,#bdccd4 36px)}.multi-helper-timeline-grid .all-helper-lane.is-day-off{background:repeating-linear-gradient(to bottom,#d8dcdf 0,#d8dcdf 17px,#c2c8cc 18px,#d8dcdf 19px,#d8dcdf 35px,#aeb6bb 36px)}.compare-timeline-card{padding:3px}.compare-timeline-card .all-helper-time,.compare-timeline-card .all-helper-client{font-size:9px}.multi-helper-view-tabs{margin-bottom:10px}
 .service-card .memo{display:block;max-width:none;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;word-break:break-word;line-height:1.35}
+.service-card .memo,.all-helper-card .all-helper-memo{color:#c62828!important}
+.service-card.changed .memo,.service-card.day-off-service .memo,.all-helper-card.day-off-reference .all-helper-memo{background:#fff;border-radius:2px}
 @page{size:landscape;margin:8mm}
 @media print{
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}

@@ -1125,6 +1125,7 @@ function renderClients(){
       }
     }else state.clients.push({id:id('c'),name,reading,address,phone});
     save();
+    render();
   };
   root.querySelectorAll('[data-client-del]').forEach(button=>button.onclick=()=>{
     const client=state.clients.find(item=>item.id===button.dataset.clientDel);
